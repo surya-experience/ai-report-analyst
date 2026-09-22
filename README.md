@@ -1,6 +1,8 @@
 # Experience.com — Profile Platform
 
-Production Next.js app: claim, complete, and grow a professional profile. Next.js 16 (App Router, TypeScript) + Tailwind + shadcn/ui, backed by Supabase (Postgres, Auth, Row-Level Security, Realtime) and the Anthropic API for the AI Coach, campaign copy, and Report Analyst.
+Production Next.js app: claim, complete, and grow a professional profile — plus an internal admin console (profiles, campaigns, support, reports) and a per-member "view as" preview. Next.js 16 (App Router, TypeScript) + Tailwind + shadcn/ui, backed by Supabase (Postgres, Auth, Row-Level Security, Realtime) and the Anthropic API for the AI Coach, campaign copy, and Report Analyst.
+
+The home page (`/`) redirects straight to `/admin` — that's this app's default landing page. The public profile directory (search/claim flow) lives at `/directory`.
 
 ## ⚠️ Admin console has no login
 
@@ -68,14 +70,24 @@ The member-facing side (profile claiming, the AI Coach, member support tickets, 
 - **`src/lib/profile-fields.ts`** mirrors the completeness-scoring logic in the `compute_completeness` SQL trigger, so the client can render an accurate percentage without a round-trip; keep both in sync if a field is added.
 - **AI features** (`src/app/api/ai/coach`, `src/app/api/support`, `src/app/api/campaigns/generate`, `src/app/api/reports/analyst`) all call the Anthropic API server-side.
 
+## Admin: "View as"
+
+From `/admin/profiles`, a claimed or Pro profile has a "View as" action that opens `/admin/view-as/[profileId]` — a read-only preview of that member's own dashboard (Search Rank Score gauge, profile score breakdown) and their own Reports page, with no separate sign-in (same no-auth model as the rest of `/admin`). It has its own layout/topbar (`src/components/view-as/`), independent of the admin shell's — "Log out" just returns to `/admin/profiles`.
+
+The reports available while viewing as a member are user-level only — Campaign Delivery Status, Campaign Statistics, Survey Results, and Profile Statistics (`src/app/(view-as)/admin/view-as/[profileId]/reports/page.tsx`) — scoped to that one profile via `profileId`, everywhere from the report query itself down to the Report Analyst's context and each export's filename. Profile Statistics is only offered here, not on the admin Reports page, since it's one profile's own trend, not an admin-level report.
+
+Exports are scoped per viewer too: `report_exports.profile_id` (migration `0009`) records who an export belongs to, so a member's "Recent exports" (attributed to their own name, not "Admin") persists across refresh and stays out of the admin's own Recent exports list, and vice versa.
+
 ## Reports
 
-Six report types live in `src/lib/reports/definitions.ts`: Account Statistics, Campaign Delivery Status, Campaign Statistics, Survey Results, SRS Overview, and Profile Statistics. Each is a real query against this app's own schema — there is no synthetic data mixed into a live report's numbers.
+Six report types live in `src/lib/reports/definitions.ts`: Account Statistics, Campaign Delivery Status, Campaign Statistics, Survey Results, SRS Overview, and Profile Statistics. Each is a real query against this app's own schema — there is no synthetic data mixed into a live report's numbers. The admin Reports page (`/admin/reports`) offers all of these except Profile Statistics — see "View as" above for where that one lives.
+
+Survey Results includes Agent and Campaign columns (joined through `survey_responses.profile_id` and `surveys.campaign_id`), and its chart preview adds "Responses by agent", "Responses by campaign", and "Average rating by agent" breakdown groups alongside the rating distribution — the aggregate chart mode (`src/lib/reports/chart-preview.ts`) supports these optional groups the same way the item/breakdown chart modes already did.
 
 Two of these (Survey Results / SRS Overview, and Profile Statistics) cover domains — a survey-taking feature and a search-ranking system — that this app doesn't otherwise implement, modeled on a separate, more complete production reporting system. Their tables (`surveys`, `survey_responses`, `profile_daily_stats`) are seeded with sample data (`supabase/seed_reports.sql`, `supabase/seed_profile_stats.sql`) rather than produced by a real feature, and this is stated plainly wherever it matters (the Report Analyst's grounding, this doc).
 
 `src/lib/reports/knowledge.ts` holds reference documentation for how each report type works in the full production system it's modeled on (columns, scoping rules, why a row might be missing, etc.), written from that system's actual docs. The Report Analyst (`src/app/api/reports/analyst`) is grounded on both this documentation *and* the report's live rows for the current selection — it's instructed to use the docs for "how/why" questions and the live data for "what/how many" questions, and to say plainly when a documented field or rule (e.g. organizations, tiers, agent roles) doesn't exist in this deployment's simpler schema, rather than pretending it applies.
 
-Preview (`src/components/reports/preview-dialog.tsx`) renders as a modal, defaulting to a Table view (every row/column), with switchable Bar/Donut/Pie/Graph chart views. For the three "one row per thing over time" reports (the two campaign reports and Profile Statistics) the chart views page through individual items with prev/next arrows, stat tiles, and a real day-by-day trend graph. Account Statistics pages through accounts the same way when "All accounts" is selected. Every download (the Table's "Download report", export, or a chart's "Download chart" PNG) is named `{report}_for_{account}_generated_on_{timestamp}`, or `..._generated_from_{start}_{end}_{timestamp}` for date-filtered reports — see `src/lib/reports/filename.ts`.
+Preview (`src/components/reports/preview-dialog.tsx`) renders as a modal, defaulting to a Table view (every row/column), with switchable Bar/Donut/Pie/Graph chart views. For the three "one row per thing over time" reports (the two campaign reports and Profile Statistics) the chart views page through individual items with prev/next arrows (hidden when there's only one to page through, e.g. Profile Statistics viewed as a single member), stat tiles, and a real day-by-day trend graph. Account Statistics pages through accounts the same way when "All accounts" is selected. A chart-type toggle and "Analyze this chart" / "Download chart" stay pinned to the bottom of the preview regardless of chart height, so they're never scrolled out of view. Every download (the Table's "Download report", export, or a chart's "Download chart" PNG) is named `{report}_for_{account}_generated_on_{timestamp}`, or `..._generated_from_{start}_{end}_{timestamp}` for date-filtered reports — see `src/lib/reports/filename.ts`.
 
 Filters: Account Statistics has an account filter (`accounts` table). Campaign Delivery Status and Campaign Statistics have an adjustable date range (defaulting to the last 90 days); Campaign Delivery Status and Survey Results also have a campaign filter — Survey Results' filter works through `surveys.campaign_id` (added in `supabase/migrations/0006_survey_campaign_link.sql`), which links each survey to the campaign that requested it, matching how the real production system scopes survey/review reports by campaign.
