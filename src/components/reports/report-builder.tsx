@@ -257,9 +257,9 @@ export function ReportBuilder({
         />
       </div>
 
-      <div>
-        <p className="font-bold text-lg mb-3">Recent exports</p>
-        <div className="space-y-3">
+      <div className="lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:flex lg:flex-col">
+        <p className="font-bold text-lg mb-3 shrink-0">Recent exports</p>
+        <div className="space-y-3 overflow-y-auto pr-1 lg:min-h-0">
           {exports.map((e) => (
             <Card key={e.id}>
               <CardContent className="py-3 space-y-1.5">

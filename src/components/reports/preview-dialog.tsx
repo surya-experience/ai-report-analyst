@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -78,6 +78,21 @@ export function PreviewDialog({
   // across agents, and which agent (or "all", for the Top 5% split) the
   // Donut/Pie view is scoped to.
   const [agentMetric, setAgentMetric] = useState("search_rank_score");
+  // Smooths the jump when switching chart types (Table's tall grid vs. a
+  // short Bar chart, etc.): the body's real height is measured and applied
+  // to a fixed-height wrapper with a CSS height transition, instead of the
+  // dialog just snapping to whatever height the new content happens to be.
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [bodyHeight, setBodyHeight] = useState<number>();
+  useLayoutEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setBodyHeight(entry.contentRect.height);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   const [agentFocus, setAgentFocus] = useState("all");
 
   // Fetches whenever the dialog transitions to open — driven off the `open`
@@ -232,6 +247,12 @@ export function PreviewDialog({
         <DialogHeader>
           <DialogTitle>Preview — {reportLabel}</DialogTitle>
         </DialogHeader>
+
+        <div
+          className="overflow-hidden transition-[height] duration-200 ease-out"
+          style={{ height: bodyHeight }}
+        >
+        <div ref={bodyRef}>
 
         {loading && (
           <div className="py-16 flex justify-center">
@@ -468,6 +489,9 @@ export function PreviewDialog({
             <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} />
           </div>
         )}
+
+        </div>
+        </div>
 
         <DialogFooter>
           <p className="text-xs text-muted-foreground">Click outside this panel to go back to Reports.</p>
