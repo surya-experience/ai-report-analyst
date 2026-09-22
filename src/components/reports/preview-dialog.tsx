@@ -282,13 +282,13 @@ export function PreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl min-w-0" closeButtonClassName={NAV_BUTTON_CLASS}>
+      <DialogContent className="sm:max-w-3xl min-w-0 max-h-[90vh] overflow-y-auto" closeButtonClassName={NAV_BUTTON_CLASS}>
         <DialogHeader>
           <DialogTitle>Preview — {reportLabel}</DialogTitle>
         </DialogHeader>
 
         <div
-          className="overflow-hidden transition-[height] duration-200 ease-out"
+          className="max-h-[60vh] overflow-y-auto transition-[height] duration-200 ease-out"
           style={{ height: bodyHeight }}
         >
         <div ref={bodyRef}>

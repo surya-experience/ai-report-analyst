@@ -279,12 +279,12 @@ export function ReportBuilder({
         />
       </div>
 
-      <div className="lg:flex lg:flex-col lg:min-h-0">
-        <p className="font-bold text-lg mb-3 shrink-0">Recent exports</p>
-        <div className="space-y-3 overflow-y-auto pr-1 lg:flex-1 lg:min-h-0">
-          {exports.map((e) => (
-            <Card key={e.id}>
-              <CardContent className="py-3 space-y-1.5">
+      <Card className="lg:flex lg:flex-col lg:min-h-0">
+        <CardContent className="pt-2 lg:flex lg:flex-col lg:min-h-0 lg:h-full">
+          <p className="font-bold text-sm mb-3 shrink-0">Recent exports</p>
+          <div className="space-y-3 overflow-y-auto pr-1 lg:flex-1 lg:min-h-0">
+            {exports.map((e) => (
+              <div key={e.id} className="rounded-lg border py-3 px-3.5 space-y-1.5">
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm">
                     <span className="font-semibold">{e.requested_by_label}</span> downloaded{" "}
@@ -304,14 +304,14 @@ export function ReportBuilder({
                   </a>
                   <span className="text-xs text-muted-foreground">{timeAgo(e.created_at)}</span>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-          {exports.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-8">No exports yet.</p>
-          )}
-        </div>
-      </div>
+              </div>
+            ))}
+            {exports.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-8">No exports yet.</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
