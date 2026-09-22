@@ -118,6 +118,7 @@ export function ReportBuilder({
         campaignId: effectiveCampaignId,
         profileId,
         accountLabel,
+        requestedByLabel: profileId ? profileName : undefined,
       }),
     });
     const data = await res.json();

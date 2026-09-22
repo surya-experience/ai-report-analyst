@@ -221,7 +221,17 @@ export function PreviewDialog({
         const res = await fetch("/api/reports/export", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reportKey, format, from, to, accountId, campaignId, profileId, accountLabel }),
+          body: JSON.stringify({
+            reportKey,
+            format,
+            from,
+            to,
+            accountId,
+            campaignId,
+            profileId,
+            accountLabel,
+            requestedByLabel: profileId ? accountLabel : undefined,
+          }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -375,31 +385,41 @@ export function PreviewDialog({
         {!loading && chartType !== "table" && preview?.mode === "items" && item && (
           <div className="space-y-5">
             <div className="flex items-center justify-between">
-              <Button
-                variant="outline"
-                size="icon"
-                className={NAV_BUTTON_CLASS}
-                disabled={index === 0}
-                onClick={() => { setIndex((i) => Math.max(0, i - 1)); setChartTurns([]); }}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
+              {preview.items.length > 1 ? (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className={NAV_BUTTON_CLASS}
+                  disabled={index === 0}
+                  onClick={() => { setIndex((i) => Math.max(0, i - 1)); setChartTurns([]); }}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              ) : (
+                <div className="size-8" />
+              )}
               <div className="text-center">
                 <p className="font-bold">{item.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {reportKey === "profile_statistics" ? "Profile" : "Campaign"} {index + 1} of {preview.items.length} ·{" "}
+                  {preview.items.length > 1
+                    ? `${reportKey === "profile_statistics" ? "Profile" : "Campaign"} ${index + 1} of ${preview.items.length} · `
+                    : ""}
                   {item.subtitle}
                 </p>
               </div>
-              <Button
-                variant="outline"
-                size="icon"
-                className={NAV_BUTTON_CLASS}
-                disabled={index === preview.items.length - 1}
-                onClick={() => { setIndex((i) => Math.min(preview.items.length - 1, i + 1)); setChartTurns([]); }}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+              {preview.items.length > 1 ? (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className={NAV_BUTTON_CLASS}
+                  disabled={index === preview.items.length - 1}
+                  onClick={() => { setIndex((i) => Math.min(preview.items.length - 1, i + 1)); setChartTurns([]); }}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              ) : (
+                <div className="size-8" />
+              )}
             </div>
 
             <div className="grid grid-cols-3 gap-3">
@@ -447,30 +467,39 @@ export function PreviewDialog({
         {!loading && chartType !== "table" && preview?.mode === "breakdowns" && account && (
           <div className="space-y-5">
             <div className="flex items-center justify-between">
-              <Button
-                variant="outline"
-                size="icon"
-                className={NAV_BUTTON_CLASS}
-                disabled={index === 0}
-                onClick={() => { setIndex((i) => Math.max(0, i - 1)); setChartTurns([]); }}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
+              {preview.accounts.length > 1 ? (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className={NAV_BUTTON_CLASS}
+                  disabled={index === 0}
+                  onClick={() => { setIndex((i) => Math.max(0, i - 1)); setChartTurns([]); }}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              ) : (
+                <div className="size-8" />
+              )}
               <div className="text-center">
                 <p className="font-bold">{account.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  Account {index + 1} of {preview.accounts.length} · {account.subtitle}
+                  {preview.accounts.length > 1 ? `Account ${index + 1} of ${preview.accounts.length} · ` : ""}
+                  {account.subtitle}
                 </p>
               </div>
-              <Button
-                variant="outline"
-                size="icon"
-                className={NAV_BUTTON_CLASS}
-                disabled={index === preview.accounts.length - 1}
-                onClick={() => { setIndex((i) => Math.min(preview.accounts.length - 1, i + 1)); setChartTurns([]); }}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+              {preview.accounts.length > 1 ? (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className={NAV_BUTTON_CLASS}
+                  disabled={index === preview.accounts.length - 1}
+                  onClick={() => { setIndex((i) => Math.min(preview.accounts.length - 1, i + 1)); setChartTurns([]); }}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              ) : (
+                <div className="size-8" />
+              )}
             </div>
 
             <div className="grid sm:grid-cols-2 gap-5 max-h-[55vh] overflow-y-auto pr-1">
