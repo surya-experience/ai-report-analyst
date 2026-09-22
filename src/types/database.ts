@@ -152,6 +152,37 @@ export interface Subscription {
   created_at: string;
 }
 
+export interface Survey {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface SurveyResponse {
+  id: string;
+  survey_id: string;
+  profile_id: string | null;
+  respondent_name: string;
+  rating: number;
+  comments: string | null;
+  created_at: string;
+}
+
+export interface ReportExport {
+  id: string;
+  report_key: string;
+  report_label: string;
+  format: "xlsx" | "csv" | "pdf";
+  range_start: string | null;
+  range_end: string | null;
+  row_count: number;
+  file_size_bytes: number;
+  storage_path: string;
+  requested_by: string | null;
+  requested_by_label: string;
+  created_at: string;
+}
+
 // Mapped-type wrappers (Homomorphic<T>, Partial<T>) get an implicit index
 // signature from TS; a plain interface referenced by name does not, so
 // without this, Row/Insert/Update below fail the GenericTable structural
@@ -182,6 +213,9 @@ export interface Database {
       notifications: Table<NotificationRow>;
       conversion_events: Table<ConversionEvent>;
       subscriptions: Table<Subscription>;
+      surveys: Table<Survey>;
+      survey_responses: Table<SurveyResponse>;
+      report_exports: Table<ReportExport>;
     };
     Views: Record<string, never>;
     Functions: {
