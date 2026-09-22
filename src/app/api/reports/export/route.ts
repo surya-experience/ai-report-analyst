@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
       storage_path: storagePath,
       requested_by_label: requestedByLabel?.trim() || "Admin",
       account_label: accountLabel?.trim() || null,
+      profile_id: profileId ?? null,
     })
     .select("*")
     .single();

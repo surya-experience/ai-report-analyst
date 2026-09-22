@@ -18,7 +18,15 @@ export default async function ViewAsReportsPage({ params }: { params: Promise<{ 
   const { data: profile } = await supabase.from("profiles").select("id, name").eq("id", profileId).single();
   if (!profile) notFound();
 
-  const { data: campaigns } = await supabase.from("campaigns").select("id, name").order("created_at", { ascending: false });
+  const [{ data: campaigns }, { data: exports }] = await Promise.all([
+    supabase.from("campaigns").select("id, name").order("created_at", { ascending: false }),
+    supabase
+      .from("report_exports")
+      .select("*")
+      .eq("profile_id", profile.id)
+      .order("created_at", { ascending: false })
+      .limit(20),
+  ]);
 
   return (
     <div className="max-w-6xl mx-auto px-8 py-7 h-full flex flex-col">
@@ -36,7 +44,7 @@ export default async function ViewAsReportsPage({ params }: { params: Promise<{ 
             label: r.label,
             description: r.description,
           }))}
-          initialExports={[]}
+          initialExports={exports ?? []}
           accounts={[]}
           campaigns={campaigns ?? []}
           profileId={profile.id}

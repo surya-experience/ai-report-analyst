@@ -242,6 +242,7 @@ export interface ReportExport {
   requested_by: string | null;
   requested_by_label: string;
   account_label: string | null;
+  profile_id: string | null;
   created_at: string;
 }
 
