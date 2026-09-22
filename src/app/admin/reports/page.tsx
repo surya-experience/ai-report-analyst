@@ -6,11 +6,10 @@ export const dynamic = "force-dynamic";
 
 export default async function ReportsPage() {
   const supabase = createAdminClient();
-  const { data: exports } = await supabase
-    .from("report_exports")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(20);
+  const [{ data: exports }, { data: accounts }] = await Promise.all([
+    supabase.from("report_exports").select("*").order("created_at", { ascending: false }).limit(20),
+    supabase.from("accounts").select("id, account_name, organization_name").order("account_name", { ascending: true }),
+  ]);
 
   return (
     <div className="max-w-6xl space-y-2">
@@ -22,6 +21,7 @@ export default async function ReportsPage() {
       <ReportBuilder
         reportOptions={REPORT_DEFINITIONS.map((r) => ({ key: r.key, label: r.label, description: r.description }))}
         initialExports={exports ?? []}
+        accounts={accounts ?? []}
       />
     </div>
   );

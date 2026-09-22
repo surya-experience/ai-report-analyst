@@ -19,7 +19,7 @@ Key columns in the full version: Number of Tiers, Number of Locations, Number of
 
 Why an account might be missing: not in an active/reportable status, or outside the requester's role-based scope.
 
-**This app's version is simpler**: it tracks individual professional profiles (claimed/unclaimed/Pro status, completeness %) rather than a full account→organization→tier hierarchy with social/GMB tracking. If asked about columns this app doesn't have (organizations, tiers, GMB, social connections), say plainly that this deployment doesn't track that yet, rather than inventing a number.
+**This app's version**: matches the documented column set exactly — the \`accounts\` table (see supabase/migrations/0004_accounts.sql) holds the same fields. It's seeded sample data (\`supabase/seed_accounts.sql\`) rather than derived from a live campaign/survey/social-connection system, since this app doesn't have one — treat the numbers as illustrative, not live account health. There's no organization/tier RBAC scoping in this deployment: the account filter on the Reports page is a simple picker, not a role-based restriction.
 `.trim(),
 
   campaign_delivery: `

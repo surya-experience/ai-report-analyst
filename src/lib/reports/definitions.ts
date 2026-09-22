@@ -1,7 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
-import { completenessOf } from "@/lib/profile-fields";
 
 export interface ReportColumn {
   key: string;
@@ -19,6 +18,11 @@ export interface DateRange {
   to: string; // ISO date, e.g. "2026-09-22"
 }
 
+export interface ReportParams {
+  // Account Statistics only: filter to one account, or omit/"" for all.
+  accountId?: string;
+}
+
 // `range.to` is a bare date. Compared as-is against a timestamptz column,
 // Postgres treats it as that day's midnight UTC, silently excluding
 // anything created later that same day — this pushes the bound to the end
@@ -31,47 +35,98 @@ export interface ReportDefinition {
   key: string;
   label: string;
   description: string;
-  fetch: (supabase: SupabaseClient<Database>, range: DateRange) => Promise<ReportResult>;
+  fetch: (supabase: SupabaseClient<Database>, range: DateRange, params?: ReportParams) => Promise<ReportResult>;
 }
 
 function fmt(iso: string | null) {
   return iso ? new Date(iso).toLocaleDateString() : "";
 }
 
+// Matches the documented column order/labels exactly (see
+// src/lib/reports/knowledge.ts) — this report is a point-in-time snapshot,
+// not date-filtered (per the docs), so `range` is accepted for API
+// consistency but not applied as a filter.
 const accountStatistics: ReportDefinition = {
   key: "account_statistics",
   label: "Account Statistics Report",
-  description: "Every profile with status, completeness, and key dates.",
-  async fetch(supabase, range) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .gte("created_at", range.from)
-      .lte("created_at", endOfDay(range.to))
-      .order("created_at", { ascending: false });
-    const rows = (data ?? []).map((p) => ({
-      name: p.name,
-      profession: p.profession,
-      organization: p.org,
-      location: p.location,
-      status: p.status,
-      completeness: `${completenessOf(p)}%`,
-      created: fmt(p.created_at),
-      claimed: fmt(p.claimed_at),
+  description: "Account and organization health snapshot — campaigns, surveys, users, publishing, and social/GMB completeness.",
+  async fetch(supabase, _range, params) {
+    let query = supabase.from("accounts").select("*").order("account_name", { ascending: true });
+    if (params?.accountId) query = query.eq("id", params.accountId);
+    const { data } = await query;
+
+    const rows = (data ?? []).map((a) => ({
+      account_name: a.account_name,
+      organization_name: a.organization_name,
+      number_of_tiers: a.number_of_tiers,
+      number_of_locations: a.number_of_locations,
+      number_of_users: a.number_of_users,
+      number_of_verified_users: a.number_of_verified_users,
+      number_of_active_campaigns: a.number_of_active_campaigns,
+      number_of_surveys_sent: a.number_of_surveys_sent,
+      number_of_surveys_completed: a.number_of_surveys_completed,
+      number_of_inactive_campaigns: a.number_of_inactive_campaigns,
+      tiers_published_listings: a.number_of_tiers_published_listings,
+      users_published_listings: a.number_of_users_published_listings,
+      tiers_published_profile_pages: a.number_of_tiers_published_profile_pages,
+      users_published_profile_pages: a.number_of_users_published_profile_pages,
+      number_of_mismatches: a.number_of_mismatches,
+      completion_rate_pct: a.completion_rate_pct != null ? `${a.completion_rate_pct}%` : "N/A",
+      tiers_facebook_connected: a.tiers_facebook_connected,
+      tiers_twitter_connected: a.tiers_twitter_connected,
+      tiers_linkedin_connected: a.tiers_linkedin_connected,
+      agents_facebook_connected: a.agents_facebook_connected,
+      agents_twitter_connected: a.agents_twitter_connected,
+      agents_linkedin_connected: a.agents_linkedin_connected,
+      tiers_verified_gmb: a.tiers_verified_gmb,
+      tiers_missing_gmb: a.tiers_missing_gmb,
+      agents_verified_gmb: a.agents_verified_gmb,
+      agents_missing_gmb: a.agents_missing_gmb,
+      tiers_missing_photos: a.tiers_missing_photos,
+      agents_missing_photos: a.agents_missing_photos,
+      tiers_missing_urls: a.tiers_missing_urls,
+      agents_missing_urls: a.agents_missing_urls,
     }));
+
+    const scopeLabel = params?.accountId
+      ? rows[0]?.account_name ?? "selected account"
+      : `${rows.length} account${rows.length === 1 ? "" : "s"}`;
+
     return {
       columns: [
-        { key: "name", label: "Name" },
-        { key: "profession", label: "Profession" },
-        { key: "organization", label: "Organization" },
-        { key: "location", label: "Location" },
-        { key: "status", label: "Status" },
-        { key: "completeness", label: "Completeness" },
-        { key: "created", label: "Created" },
-        { key: "claimed", label: "Claimed" },
+        { key: "account_name", label: "Account Name" },
+        { key: "organization_name", label: "Organization Name" },
+        { key: "number_of_tiers", label: "Number of Tiers" },
+        { key: "number_of_locations", label: "Number of Locations" },
+        { key: "number_of_users", label: "Number of Users" },
+        { key: "number_of_verified_users", label: "Number of Verified Users" },
+        { key: "number_of_active_campaigns", label: "Number of Active campaigns" },
+        { key: "number_of_surveys_sent", label: "Number of surveys sent" },
+        { key: "number_of_surveys_completed", label: "Number of surveys completed" },
+        { key: "number_of_inactive_campaigns", label: "Number of Inactive campaigns" },
+        { key: "tiers_published_listings", label: "Number of Tiers published for listings" },
+        { key: "users_published_listings", label: "Number of Users published for listings" },
+        { key: "tiers_published_profile_pages", label: "Number of Tiers published for public profile pages" },
+        { key: "users_published_profile_pages", label: "Number of Users published for public profile pages" },
+        { key: "number_of_mismatches", label: "Number of Mismatches" },
+        { key: "completion_rate_pct", label: "Completion rate %" },
+        { key: "tiers_facebook_connected", label: "Number of tiers with Facebook Connected" },
+        { key: "tiers_twitter_connected", label: "Number of tiers with Twitter Connected" },
+        { key: "tiers_linkedin_connected", label: "Number of tiers with LinkedIn Connected" },
+        { key: "agents_facebook_connected", label: "Number of agents with Facebook Connected" },
+        { key: "agents_twitter_connected", label: "Number of agents with Twitter Connected" },
+        { key: "agents_linkedin_connected", label: "Number of agents with LinkedIn Connected" },
+        { key: "tiers_verified_gmb", label: "Number of tiers with Verified GMB" },
+        { key: "tiers_missing_gmb", label: "Number of tiers Missing GMB" },
+        { key: "agents_verified_gmb", label: "Number of agents with Verified GMB" },
+        { key: "agents_missing_gmb", label: "Number of agents Missing GMB" },
+        { key: "tiers_missing_photos", label: "Number of tiers Missing Photos" },
+        { key: "agents_missing_photos", label: "Number of agents Missing Photos" },
+        { key: "tiers_missing_urls", label: "Number of tiers Missing URLs" },
+        { key: "agents_missing_urls", label: "Number of agents Missing URLs" },
       ],
       rows,
-      summaryLabel: `Account Statistics · ${range.from} to ${range.to} · ${rows.length} profiles included.`,
+      summaryLabel: `Account Statistics · point-in-time snapshot · ${scopeLabel} included.`,
     };
   },
 };

@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/database";
-import { endOfDay, type DateRange } from "@/lib/reports/definitions";
+import type { Database, Account } from "@/types/database";
+import { endOfDay, type DateRange, type ReportParams } from "@/lib/reports/definitions";
 
 export interface ChartCategory {
   label: string;
@@ -28,9 +28,17 @@ export interface PreviewItem {
   seriesKeys: SeriesLineDef[];
 }
 
+export interface ChartBreakdownGroup {
+  label: string;
+  categories: ChartCategory[];
+}
+
 export type ChartPreview =
   | { mode: "aggregate"; title: string; categories: ChartCategory[] }
-  | { mode: "items"; title: string; items: PreviewItem[] };
+  | { mode: "items"; title: string; items: PreviewItem[] }
+  // Multiple named part-to-whole breakdowns for one selected account —
+  // Account Statistics only. Each group renders as its own small chart.
+  | { mode: "breakdowns"; title: string; subtitle: string; groups: ChartBreakdownGroup[] };
 
 const ITEM_MODE_REPORT_KEYS = new Set(["campaign_delivery", "campaign_statistics", "profile_statistics"]);
 
@@ -171,10 +179,98 @@ async function buildProfileStatItems(supabase: SupabaseClient<Database>, range: 
   return items;
 }
 
+// Every pair here is a real part-to-whole breakdown of two-or-more columns
+// on one `accounts` row — nothing here is estimated or invented, it's just
+// the same numbers the export/table view shows, grouped for charting.
+function accountBreakdownGroups(a: Account): ChartBreakdownGroup[] {
+  return [
+    {
+      label: "Campaigns",
+      categories: [
+        { label: "Active", value: a.number_of_active_campaigns },
+        { label: "Inactive", value: a.number_of_inactive_campaigns },
+      ],
+    },
+    {
+      label: "Surveys",
+      categories: [
+        { label: "Completed", value: a.number_of_surveys_completed },
+        { label: "Not completed", value: Math.max(0, a.number_of_surveys_sent - a.number_of_surveys_completed) },
+      ],
+    },
+    {
+      label: "Users",
+      categories: [
+        { label: "Verified", value: a.number_of_verified_users },
+        { label: "Unverified", value: Math.max(0, a.number_of_users - a.number_of_verified_users) },
+      ],
+    },
+    {
+      label: "Tiers — GMB",
+      categories: [
+        { label: "Verified", value: a.tiers_verified_gmb },
+        { label: "Missing", value: a.tiers_missing_gmb },
+      ],
+    },
+    {
+      label: "Agents — GMB",
+      categories: [
+        { label: "Verified", value: a.agents_verified_gmb },
+        { label: "Missing", value: a.agents_missing_gmb },
+      ],
+    },
+    {
+      label: "Tiers published — listings",
+      categories: [
+        { label: "Published", value: a.number_of_tiers_published_listings },
+        { label: "Not published", value: Math.max(0, a.number_of_tiers - a.number_of_tiers_published_listings) },
+      ],
+    },
+    {
+      label: "Users published — listings",
+      categories: [
+        { label: "Published", value: a.number_of_users_published_listings },
+        { label: "Not published", value: Math.max(0, a.number_of_users - a.number_of_users_published_listings) },
+      ],
+    },
+    {
+      label: "Tiers published — profile pages",
+      categories: [
+        { label: "Published", value: a.number_of_tiers_published_profile_pages },
+        { label: "Not published", value: Math.max(0, a.number_of_tiers - a.number_of_tiers_published_profile_pages) },
+      ],
+    },
+    {
+      label: "Users published — profile pages",
+      categories: [
+        { label: "Published", value: a.number_of_users_published_profile_pages },
+        { label: "Not published", value: Math.max(0, a.number_of_users - a.number_of_users_published_profile_pages) },
+      ],
+    },
+    {
+      label: "Tiers — social connections",
+      categories: [
+        { label: "Facebook", value: a.tiers_facebook_connected },
+        { label: "Twitter", value: a.tiers_twitter_connected },
+        { label: "LinkedIn", value: a.tiers_linkedin_connected },
+      ],
+    },
+    {
+      label: "Agents — social connections",
+      categories: [
+        { label: "Facebook", value: a.agents_facebook_connected },
+        { label: "Twitter", value: a.agents_twitter_connected },
+        { label: "LinkedIn", value: a.agents_linkedin_connected },
+      ],
+    },
+  ];
+}
+
 export async function buildChartPreview(
   supabase: SupabaseClient<Database>,
   reportKey: string,
-  range: DateRange
+  range: DateRange,
+  params?: ReportParams
 ): Promise<ChartPreview> {
   if (reportKey === "campaign_delivery" || reportKey === "campaign_statistics") {
     return { mode: "items", title: "Campaign Delivery Report", items: await buildCampaignItems(supabase, range) };
@@ -198,18 +294,21 @@ export async function buildChartPreview(
     return { mode: "aggregate", title: "Rating distribution", categories };
   }
 
-  // account_statistics (default)
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("status")
-    .gte("created_at", range.from)
-    .lte("created_at", endOfDay(range.to));
-  const rows = profiles ?? [];
-  const categories: ChartCategory[] = [
-    { label: "Total", value: rows.length },
-    { label: "Unclaimed", value: rows.filter((p) => p.status === "unclaimed").length },
-    { label: "Claimed", value: rows.filter((p) => p.status === "claimed").length },
-    { label: "Pro", value: rows.filter((p) => p.status === "pro").length },
-  ];
-  return { mode: "aggregate", title: "Account Statistics Report", categories };
+  // account_statistics (default): part-to-whole breakdowns for the
+  // selected account (or the first account, if none is selected yet).
+  let accountQuery = supabase.from("accounts").select("*").order("account_name", { ascending: true }).limit(1);
+  if (params?.accountId) accountQuery = supabase.from("accounts").select("*").eq("id", params.accountId);
+  const { data: accountRows } = await accountQuery;
+  const account = accountRows?.[0];
+
+  if (!account) {
+    return { mode: "breakdowns", title: "Account Statistics Report", subtitle: "No accounts found", groups: [] };
+  }
+
+  return {
+    mode: "breakdowns",
+    title: "Account Statistics Report",
+    subtitle: `${account.account_name} · ${account.organization_name}`,
+    groups: accountBreakdownGroups(account),
+  };
 }

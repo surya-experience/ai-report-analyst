@@ -7,12 +7,13 @@ import { buildReportFile, type ExportFormat } from "@/lib/reports/export";
 // requested_by_label is a free-text display name since there's no admin
 // identity to attribute the export to; it defaults to "Admin".
 export async function POST(req: NextRequest) {
-  const { reportKey, format, from, to, requestedByLabel } = (await req.json()) as {
+  const { reportKey, format, from, to, requestedByLabel, accountId } = (await req.json()) as {
     reportKey: string;
     format: ExportFormat;
     from: string;
     to: string;
     requestedByLabel?: string;
+    accountId?: string;
   };
   const definition = getReportDefinition(reportKey);
   if (!definition) return NextResponse.json({ error: "Unknown report" }, { status: 400 });
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = createAdminClient();
-  const result = await definition.fetch(supabase, { from, to });
+  const result = await definition.fetch(supabase, { from, to }, { accountId });
   const file = await buildReportFile(format, definition.label, result.summaryLabel, result.rows, result.columns);
 
   const storagePath = `${reportKey}/${Date.now()}-${crypto.randomUUID()}.${file.extension}`;

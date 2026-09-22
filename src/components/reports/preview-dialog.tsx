@@ -26,6 +26,7 @@ export function PreviewDialog({
   isItemModeReport,
   from,
   to,
+  accountId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -34,6 +35,7 @@ export function PreviewDialog({
   isItemModeReport: boolean;
   from: string;
   to: string;
+  accountId?: string;
 }) {
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<ChartPreview | null>(null);
@@ -57,7 +59,7 @@ export function PreviewDialog({
     fetch("/api/reports/chart-preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reportKey, from, to }),
+      body: JSON.stringify({ reportKey, from, to, accountId }),
     })
       .then((r) => r.json())
       .then((data) => {
@@ -73,7 +75,7 @@ export function PreviewDialog({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, reportKey, from, to]);
+  }, [open, reportKey, from, to, accountId]);
 
   const options: { value: ChartType; label: string }[] =
     preview?.mode === "items"
@@ -93,9 +95,12 @@ export function PreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className={preview?.mode === "breakdowns" ? "sm:max-w-3xl" : "sm:max-w-xl"}>
         <DialogHeader>
           <DialogTitle>Preview — {reportLabel}</DialogTitle>
+          {preview?.mode === "breakdowns" && preview.subtitle && (
+            <p className="text-xs text-muted-foreground">{preview.subtitle}</p>
+          )}
         </DialogHeader>
 
         {loading && (
@@ -107,8 +112,8 @@ export function PreviewDialog({
         {!loading && preview?.mode === "aggregate" && (
           <div className="space-y-6">
             {chartType === "bar" && <CategoryBars categories={preview.categories} />}
-            {chartType === "donut" && <CategoryPie categories={preview.categories.slice(1)} donut />}
-            {chartType === "pie" && <CategoryPie categories={preview.categories.slice(1)} donut={false} />}
+            {chartType === "donut" && <CategoryPie categories={preview.categories} donut />}
+            {chartType === "pie" && <CategoryPie categories={preview.categories} donut={false} />}
             <ChartTypeToggle options={options} value={chartType} onChange={setChartType} />
           </div>
         )}
@@ -165,6 +170,36 @@ export function PreviewDialog({
           <p className="text-sm text-muted-foreground text-center py-10">
             No {reportKey === "profile_statistics" ? "profile stats" : "campaigns"} in this date range.
           </p>
+        )}
+
+        {!loading && preview?.mode === "breakdowns" && preview.groups.length > 0 && (
+          <div className="space-y-5">
+            <div className="grid sm:grid-cols-2 gap-5 max-h-[60vh] overflow-y-auto pr-1">
+              {preview.groups.map((g) => (
+                <div key={g.label} className="rounded-lg border p-3">
+                  <p className="text-xs font-semibold mb-2">{g.label}</p>
+                  {chartType === "bar" && <CategoryBars categories={g.categories} />}
+                  {chartType === "donut" && <CategoryPie categories={g.categories} donut />}
+                  {(chartType === "pie" || chartType === "graph") && (
+                    <CategoryPie categories={g.categories} donut={false} />
+                  )}
+                </div>
+              ))}
+            </div>
+            <ChartTypeToggle
+              options={[
+                { value: "bar", label: "Bar" },
+                { value: "donut", label: "Donut" },
+                { value: "pie", label: "Pie" },
+              ]}
+              value={chartType === "graph" ? "pie" : chartType}
+              onChange={setChartType}
+            />
+          </div>
+        )}
+
+        {!loading && preview?.mode === "breakdowns" && preview.groups.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-10">No accounts to show yet.</p>
         )}
 
         <DialogFooter>

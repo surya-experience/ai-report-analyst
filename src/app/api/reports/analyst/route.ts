@@ -11,18 +11,19 @@ import type Anthropic from "@anthropic-ai/sdk";
 // that's what makes "ask about this report" a meaningful, checkable claim
 // instead of the model reasoning over data the person can't see.
 export async function POST(req: NextRequest) {
-  const { question, reportKey, from, to } = (await req.json()) as {
+  const { question, reportKey, from, to, accountId } = (await req.json()) as {
     question: string;
     reportKey: string;
     from: string;
     to: string;
+    accountId?: string;
   };
   if (!question?.trim()) return NextResponse.json({ error: "question is required" }, { status: 400 });
   const definition = getReportDefinition(reportKey);
   if (!definition) return NextResponse.json({ error: "Unknown report" }, { status: 400 });
 
   const supabase = createAdminClient();
-  const result = await definition.fetch(supabase, { from, to });
+  const result = await definition.fetch(supabase, { from, to }, { accountId });
   // Cap what goes to the model — full exports can run into the thousands
   // of rows, and the analyst only needs enough to answer well-scoped
   // questions, not a verbatim copy of the export.

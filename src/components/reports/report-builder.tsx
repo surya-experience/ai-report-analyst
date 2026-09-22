@@ -21,9 +21,16 @@ interface ReportOption {
   description: string;
 }
 
+interface AccountOption {
+  id: string;
+  account_name: string;
+  organization_name: string;
+}
+
 // Kept in sync with ITEM_MODE_REPORT_KEYS in lib/reports/chart-preview.ts —
 // that module is server-only, so this client component can't import it.
 const ITEM_MODE_REPORT_KEYS = new Set(["campaign_delivery", "campaign_statistics", "profile_statistics"]);
+const ACCOUNT_FILTER_REPORT_KEYS = new Set(["account_statistics"]);
 
 interface ExportRow {
   id: string;
@@ -51,11 +58,14 @@ const ninetyDaysAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
 export function ReportBuilder({
   reportOptions,
   initialExports,
+  accounts,
 }: {
   reportOptions: ReportOption[];
   initialExports: ExportRow[];
+  accounts: AccountOption[];
 }) {
   const [reportKey, setReportKey] = useState(reportOptions[0]?.key ?? "");
+  const [accountId, setAccountId] = useState<string>("all");
   const [format, setFormat] = useState("xlsx");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -64,17 +74,19 @@ export function ReportBuilder({
 
   const range = { from: isoDate(ninetyDaysAgo), to: isoDate(today) };
   const selected = reportOptions.find((r) => r.key === reportKey);
+  const showAccountFilter = ACCOUNT_FILTER_REPORT_KEYS.has(reportKey);
+  const effectiveAccountId = showAccountFilter && accountId !== "all" ? accountId : undefined;
 
-  // Refresh the "included" summary whenever the report changes. The reset
-  // happens inside the fetch callback (not synchronously in the effect
-  // body) so a fast report switch can't have an in-flight older request
-  // clobber a newer one.
+  // Refresh the "included" summary whenever the report or account filter
+  // changes. The reset happens inside the fetch callback (not synchronously
+  // in the effect body) so a fast switch can't have an in-flight older
+  // request clobber a newer one.
   useEffect(() => {
     let cancelled = false;
     fetch("/api/reports/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reportKey, ...range }),
+      body: JSON.stringify({ reportKey, ...range, accountId: effectiveAccountId }),
     })
       .then((r) => r.json())
       .then((data) => {
@@ -86,14 +98,14 @@ export function ReportBuilder({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportKey]);
+  }, [reportKey, effectiveAccountId]);
 
   async function exportReport() {
     setExporting(true);
     const res = await fetch("/api/reports/export", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reportKey, format, ...range }),
+      body: JSON.stringify({ reportKey, format, ...range, accountId: effectiveAccountId }),
     });
     const data = await res.json();
     setExporting(false);
@@ -142,6 +154,25 @@ export function ReportBuilder({
                   </SelectContent>
                 </Select>
               </div>
+
+              {showAccountFilter && (
+                <div className="sm:col-span-2">
+                  <p className="text-xs font-semibold text-muted-foreground mb-1.5">Account</p>
+                  <Select value={accountId} onValueChange={setAccountId}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All accounts</SelectItem>
+                      {accounts.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.account_name} · {a.organization_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2">
@@ -169,14 +200,16 @@ export function ReportBuilder({
           isItemModeReport={ITEM_MODE_REPORT_KEYS.has(reportKey)}
           from={range.from}
           to={range.to}
+          accountId={effectiveAccountId}
         />
 
         <ReportAnalyst
-          key={reportKey}
+          key={`${reportKey}:${effectiveAccountId ?? "all"}`}
           reportKey={reportKey}
           reportLabel={selected?.label ?? ""}
           from={range.from}
           to={range.to}
+          accountId={effectiveAccountId}
         />
       </div>
 

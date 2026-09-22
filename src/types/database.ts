@@ -168,6 +168,41 @@ export interface SurveyResponse {
   created_at: string;
 }
 
+export interface Account {
+  id: string;
+  account_name: string;
+  organization_name: string;
+  number_of_tiers: number;
+  number_of_locations: number;
+  number_of_users: number;
+  number_of_verified_users: number;
+  number_of_active_campaigns: number;
+  number_of_surveys_sent: number;
+  number_of_surveys_completed: number;
+  number_of_inactive_campaigns: number;
+  number_of_tiers_published_listings: number;
+  number_of_users_published_listings: number;
+  number_of_tiers_published_profile_pages: number;
+  number_of_users_published_profile_pages: number;
+  number_of_mismatches: number;
+  completion_rate_pct: number | null;
+  tiers_facebook_connected: number;
+  tiers_twitter_connected: number;
+  tiers_linkedin_connected: number;
+  agents_facebook_connected: number;
+  agents_twitter_connected: number;
+  agents_linkedin_connected: number;
+  tiers_verified_gmb: number;
+  tiers_missing_gmb: number;
+  agents_verified_gmb: number;
+  agents_missing_gmb: number;
+  tiers_missing_photos: number;
+  agents_missing_photos: number;
+  tiers_missing_urls: number;
+  agents_missing_urls: number;
+  created_at: string;
+}
+
 export interface ProfileDailyStat {
   id: string;
   profile_id: string;
@@ -233,6 +268,7 @@ export interface Database {
       survey_responses: Table<SurveyResponse>;
       report_exports: Table<ReportExport>;
       profile_daily_stats: Table<ProfileDailyStat>;
+      accounts: Table<Account>;
     };
     Views: Record<string, never>;
     Functions: {
