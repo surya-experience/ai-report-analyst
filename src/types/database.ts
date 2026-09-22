@@ -223,7 +223,7 @@ export interface ReportExport {
   id: string;
   report_key: string;
   report_label: string;
-  format: "xlsx" | "csv" | "pdf";
+  format: "xlsx" | "csv";
   range_start: string | null;
   range_end: string | null;
   row_count: number;

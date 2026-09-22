@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getReportDefinition } from "@/lib/reports/definitions";
+import { getReportDefinition, isDateFilteredReport } from "@/lib/reports/definitions";
 import { buildReportFile, type ExportFormat } from "@/lib/reports/export";
 
 // SECURITY: no auth check — see README.md "Admin console has no login".
@@ -17,13 +17,14 @@ export async function POST(req: NextRequest) {
   };
   const definition = getReportDefinition(reportKey);
   if (!definition) return NextResponse.json({ error: "Unknown report" }, { status: 400 });
-  if (!["xlsx", "csv", "pdf"].includes(format)) {
+  if (!["xlsx", "csv"].includes(format)) {
     return NextResponse.json({ error: "Unknown format" }, { status: 400 });
   }
 
   const supabase = createAdminClient();
   const result = await definition.fetch(supabase, { from, to }, { accountId });
-  const file = await buildReportFile(format, definition.label, result.summaryLabel, result.rows, result.columns);
+  const file = buildReportFile(format, result.rows, result.columns);
+  const dateFiltered = isDateFilteredReport(reportKey);
 
   const storagePath = `${reportKey}/${Date.now()}-${crypto.randomUUID()}.${file.extension}`;
   const { error: uploadError } = await supabase.storage
@@ -37,8 +38,8 @@ export async function POST(req: NextRequest) {
       report_key: reportKey,
       report_label: definition.label,
       format,
-      range_start: from,
-      range_end: to,
+      range_start: dateFiltered ? from : null,
+      range_end: dateFiltered ? to : null,
       row_count: result.rows.length,
       file_size_bytes: file.buffer.byteLength,
       storage_path: storagePath,

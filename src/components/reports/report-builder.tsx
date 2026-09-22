@@ -46,7 +46,6 @@ interface ExportRow {
 const FORMATS = [
   { value: "xlsx", label: "XLSX" },
   { value: "csv", label: "CSV" },
-  { value: "pdf", label: "PDF" },
 ];
 
 function isoDate(d: Date) {

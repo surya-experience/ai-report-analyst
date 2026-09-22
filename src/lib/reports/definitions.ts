@@ -88,9 +88,16 @@ const accountStatistics: ReportDefinition = {
       agents_missing_urls: a.agents_missing_urls,
     }));
 
-    const scopeLabel = params?.accountId
-      ? rows[0]?.account_name ?? "selected account"
-      : `${rows.length} account${rows.length === 1 ? "" : "s"}`;
+    const totalUsers = rows.reduce((sum, r) => sum + (typeof r.number_of_users === "number" ? r.number_of_users : 0), 0);
+    const totalActiveCampaigns = rows.reduce(
+      (sum, r) => sum + (typeof r.number_of_active_campaigns === "number" ? r.number_of_active_campaigns : 0),
+      0
+    );
+
+    const summaryLabel =
+      params?.accountId && rows[0]
+        ? `Account Statistics · ${rows[0].account_name} (${rows[0].organization_name}) · ${rows[0].number_of_users} users, ${rows[0].number_of_active_campaigns} active campaigns, ${rows[0].completion_rate_pct} completion rate.`
+        : `Account Statistics · ${rows.length} account${rows.length === 1 ? "" : "s"} · ${totalUsers} users, ${totalActiveCampaigns} active campaigns combined.`;
 
     return {
       columns: [
@@ -126,7 +133,7 @@ const accountStatistics: ReportDefinition = {
         { key: "agents_missing_urls", label: "Number of agents Missing URLs" },
       ],
       rows,
-      summaryLabel: `Account Statistics · point-in-time snapshot · ${scopeLabel} included.`,
+      summaryLabel,
     };
   },
 };
@@ -358,4 +365,12 @@ export const REPORT_DEFINITIONS: ReportDefinition[] = [
 
 export function getReportDefinition(key: string): ReportDefinition | undefined {
   return REPORT_DEFINITIONS.find((r) => r.key === key);
+}
+
+// Account Statistics is a point-in-time snapshot, not filtered by date (see
+// its fetch() above and knowledge.ts) — every other report is. Used to
+// decide whether a date range is meaningful to show/store for a given
+// report (e.g. in the export summary banner and "Recent exports" history).
+export function isDateFilteredReport(key: string): boolean {
+  return key !== "account_statistics";
 }
