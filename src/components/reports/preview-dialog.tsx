@@ -360,14 +360,14 @@ export function PreviewDialog({
 
         {!loading && chartType !== "table" && preview?.mode === "aggregate" && (
           <div className="space-y-5">
-            <div>
+            <div className={preview.groups && preview.groups.length > 0 ? "max-h-[22vh] overflow-y-auto pr-1" : undefined}>
               <p className="text-xs font-semibold mb-2">{preview.title}</p>
               {chartType === "bar" && <CategoryBars categories={preview.categories} />}
               {chartType === "donut" && <CategoryPie categories={preview.categories} donut />}
               {chartType === "pie" && <CategoryPie categories={preview.categories} donut={false} />}
             </div>
             {preview.groups && preview.groups.length > 0 && (
-              <div className="grid sm:grid-cols-2 gap-5 max-h-[40vh] overflow-y-auto pr-1">
+              <div className="grid sm:grid-cols-2 gap-5 max-h-[26vh] overflow-y-auto pr-1">
                 {preview.groups.map((g) => (
                   <div key={g.label} className="rounded-lg border p-3">
                     <p className="text-xs font-semibold mb-2">{g.label}</p>
@@ -614,8 +614,16 @@ function ToolbarRow({
   onChartFollowUpChange: (v: string) => void;
   onAsk: (question: string) => void;
 }) {
+  // Sticky to the bottom of the dialog body's own scroll container (not
+  // the page) — this row is always the last thing in a chart-mode block,
+  // and that block can run taller than the body's max-h (e.g. Survey
+  // Results' rating chart + agent/campaign breakdown groups), which
+  // otherwise buries the chart-type toggle and "Analyze this chart" below
+  // a scroll the user has no visual cue to make. Pinning it here keeps
+  // both reachable without scrolling, regardless of how tall the chart
+  // content above happens to be.
   return (
-    <>
+    <div className="sticky bottom-0 z-10 -mx-1 mt-2 space-y-3 border-t bg-background/95 px-1 pb-1 pt-3 backdrop-blur">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <ChartTypeToggle options={options} value={value} onChange={onChange} />
         <div className="flex items-center gap-2">
@@ -633,17 +641,23 @@ function ToolbarRow({
       </div>
 
       {value !== "table" && chartTurns.length > 0 && (
-        <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 p-3 space-y-2.5">
-          {chartTurns.map((t, i) => (
-            <p key={i} className={t.role === "assistant" ? "text-sm text-indigo-950 leading-relaxed" : "text-sm font-semibold text-indigo-700"}>
-              {t.role === "user" ? `You: ${t.text}` : t.text}
-            </p>
-          ))}
-          {chartAsking && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Thinking…
-            </div>
-          )}
+        <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 p-3 flex flex-col max-h-[30vh]">
+          {/* The follow-up input sits outside this scroll region (below)
+              so a long answer never pushes it out of reach the same way
+              the chart content above used to push this whole toolbar
+              out of reach. */}
+          <div className="space-y-2.5 overflow-y-auto min-h-0">
+            {chartTurns.map((t, i) => (
+              <p key={i} className={t.role === "assistant" ? "text-sm text-indigo-950 leading-relaxed" : "text-sm font-semibold text-indigo-700"}>
+                {t.role === "user" ? `You: ${t.text}` : t.text}
+              </p>
+            ))}
+            {chartAsking && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Thinking…
+              </div>
+            )}
+          </div>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -652,7 +666,7 @@ function ToolbarRow({
               onAsk(q);
               onChartFollowUpChange("");
             }}
-            className="flex gap-2 pt-1"
+            className="flex gap-2 pt-2 shrink-0"
           >
             <Input
               value={chartFollowUp}
@@ -667,7 +681,7 @@ function ToolbarRow({
           </form>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
