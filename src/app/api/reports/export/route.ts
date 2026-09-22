@@ -8,7 +8,7 @@ import { buildExportFilename } from "@/lib/reports/filename";
 // requested_by_label is a free-text display name since there's no admin
 // identity to attribute the export to; it defaults to "Admin".
 export async function POST(req: NextRequest) {
-  const { reportKey, format, from, to, requestedByLabel, accountId, campaignId, accountLabel } = (await req.json()) as {
+  const { reportKey, format, from, to, requestedByLabel, accountId, campaignId, profileId, accountLabel } = (await req.json()) as {
     reportKey: string;
     format: ExportFormat;
     from: string;
@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
     requestedByLabel?: string;
     accountId?: string;
     campaignId?: string;
+    profileId?: string;
     accountLabel?: string;
   };
   const definition = getReportDefinition(reportKey);
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = createAdminClient();
-  const result = await definition.fetch(supabase, { from, to }, { accountId, campaignId });
+  const result = await definition.fetch(supabase, { from, to }, { accountId, campaignId, profileId });
   const file = buildReportFile(format, result.rows, result.columns);
   const dateFiltered = isDateFilteredReport(reportKey);
 

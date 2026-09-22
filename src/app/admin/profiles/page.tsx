@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -9,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import Link from "next/link";
+import { UserCog } from "lucide-react";
 import { completenessOf } from "@/lib/profile-fields";
 import { ProfileFilters } from "@/components/admin/profile-filters";
 
@@ -62,6 +64,7 @@ export default async function AdminProfilesPage({
               <TableHead>Status</TableHead>
               <TableHead>Complete</TableHead>
               <TableHead>Created</TableHead>
+              <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -92,11 +95,21 @@ export default async function AdminProfilesPage({
                 <TableCell className="text-muted-foreground">
                   {new Date(p.created_at).toLocaleDateString()}
                 </TableCell>
+                <TableCell>
+                  {p.status !== "unclaimed" && (
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href={`/admin/view-as/${p.id}`}>
+                        <UserCog className="h-3.5 w-3.5 mr-1.5" />
+                        View as
+                      </Link>
+                    </Button>
+                  )}
+                </TableCell>
               </TableRow>
             ))}
             {profiles?.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                   No profiles match these filters.
                 </TableCell>
               </TableRow>

@@ -24,6 +24,10 @@ export interface ReportParams {
   // Campaign Delivery Status + Survey Results only: filter to one
   // campaign, or omit/"" for all.
   campaignId?: string;
+  // Campaign Delivery Status, Campaign Statistics, Survey Results, Profile
+  // Statistics: filter to one profile ("view as" a single member/agent —
+  // see /admin/view-as). Omit for the admin-level, cross-profile view.
+  profileId?: string;
 }
 
 // `range.to` is a bare date. Compared as-is against a timestamptz column,
@@ -154,6 +158,7 @@ const campaignDeliveryStatus: ReportDefinition = {
       .order("created_at", { ascending: false })
       .limit(2000);
     if (params?.campaignId) query = query.eq("campaign_id", params.campaignId);
+    if (params?.profileId) query = query.eq("profile_id", params.profileId);
     const { data } = await query;
     const rows = (data ?? []).map((s) => {
       const campaign = s.campaigns as unknown as { name: string; segment: string } | null;
@@ -200,7 +205,7 @@ const campaignStatistics: ReportDefinition = {
   key: "campaign_statistics",
   label: "Campaign Statistics Report",
   description: "Per-campaign send, open, and click totals with rates.",
-  async fetch(supabase, range) {
+  async fetch(supabase, range, params) {
     const { data: campaigns } = await supabase
       .from("campaigns")
       .select("*")
@@ -209,9 +214,12 @@ const campaignStatistics: ReportDefinition = {
       .order("created_at", { ascending: false });
 
     const campaignIds = (campaigns ?? []).map((c) => c.id);
-    const { data: sends } = campaignIds.length
-      ? await supabase.from("campaign_sends").select("campaign_id, status").in("campaign_id", campaignIds)
-      : { data: [] as { campaign_id: string; status: string }[] };
+    let sends: { campaign_id: string; status: string }[] = [];
+    if (campaignIds.length) {
+      let sendsQuery = supabase.from("campaign_sends").select("campaign_id, status").in("campaign_id", campaignIds);
+      if (params?.profileId) sendsQuery = sendsQuery.eq("profile_id", params.profileId);
+      sends = (await sendsQuery).data ?? [];
+    }
 
     const rows = (campaigns ?? []).map((c) => {
       const rowsForCampaign = (sends ?? []).filter((s) => s.campaign_id === c.id);
@@ -263,6 +271,7 @@ const surveyResults: ReportDefinition = {
       .order("created_at", { ascending: false })
       .limit(2000);
     if (params?.campaignId) query = query.eq("surveys.campaign_id", params.campaignId);
+    if (params?.profileId) query = query.eq("profile_id", params.profileId);
     const { data } = await query;
     const rows = (data ?? []).map((r) => {
       const survey = r.surveys as unknown as { name: string } | null;
@@ -360,14 +369,16 @@ const profileStatistics: ReportDefinition = {
   key: "profile_statistics",
   label: "Profile Statistics Report",
   description: "Day-by-day ranking and visibility trend, one row per profile per day.",
-  async fetch(supabase, range) {
-    const { data } = await supabase
+  async fetch(supabase, range, params) {
+    let query = supabase
       .from("profile_daily_stats")
       .select("*, profiles(name)")
       .gte("stat_date", range.from)
       .lte("stat_date", range.to)
       .order("stat_date", { ascending: false })
       .limit(2000);
+    if (params?.profileId) query = query.eq("profile_id", params.profileId);
+    const { data } = await query;
     const rows = (data ?? []).map((r) => {
       const profile = r.profiles as unknown as { name: string } | null;
       const searchRankScore =

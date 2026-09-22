@@ -39,7 +39,7 @@ const ACCOUNT_FILTER_REPORT_KEYS = new Set(["account_statistics"]);
 // Unlike that function (every report except account_statistics), the date
 // range is only user-adjustable for these three; the rest keep the fixed
 // last-90-days default.
-const DATE_FILTER_REPORT_KEYS = new Set(["campaign_delivery", "campaign_statistics", "survey_results"]);
+const DATE_FILTER_REPORT_KEYS = new Set(["campaign_delivery", "campaign_statistics", "survey_results", "profile_statistics"]);
 const CAMPAIGN_FILTER_REPORT_KEYS = new Set(["campaign_delivery", "survey_results"]);
 
 interface ExportRow {
@@ -69,11 +69,18 @@ export function ReportBuilder({
   initialExports,
   accounts,
   campaigns,
+  profileId,
+  profileName,
 }: {
   reportOptions: ReportOption[];
   initialExports: ExportRow[];
   accounts: AccountOption[];
   campaigns: CampaignOption[];
+  // Set only by the "view as" reports page: fixes every fetch/export/
+  // analyst call to this one profile, and stands in for the account
+  // filter (which doesn't apply at the user level) in filenames.
+  profileId?: string;
+  profileName?: string;
 }) {
   const [reportKey, setReportKey] = useState(reportOptions[0]?.key ?? "");
   const [accountId, setAccountId] = useState<string>("all");
@@ -92,7 +99,11 @@ export function ReportBuilder({
   const showCampaignFilter = CAMPAIGN_FILTER_REPORT_KEYS.has(reportKey);
   const effectiveAccountId = showAccountFilter && accountId !== "all" ? accountId : undefined;
   const effectiveCampaignId = showCampaignFilter && campaignId !== "all" ? campaignId : undefined;
-  const accountLabel = effectiveAccountId ? accounts.find((a) => a.id === effectiveAccountId)?.account_name : undefined;
+  const accountLabel = profileId
+    ? profileName
+    : effectiveAccountId
+    ? accounts.find((a) => a.id === effectiveAccountId)?.account_name
+    : undefined;
 
   async function exportReport() {
     setExporting(true);
@@ -105,6 +116,7 @@ export function ReportBuilder({
         ...range,
         accountId: effectiveAccountId,
         campaignId: effectiveCampaignId,
+        profileId,
         accountLabel,
       }),
     });
@@ -241,19 +253,21 @@ export function ReportBuilder({
           to={range.to}
           accountId={effectiveAccountId}
           campaignId={effectiveCampaignId}
+          profileId={profileId}
           accountLabel={accountLabel}
           format={format as "xlsx" | "csv"}
           onExported={(row) => setExports((prev) => [row as ExportRow, ...prev])}
         />
 
         <ReportAnalyst
-          key={`${reportKey}:${effectiveAccountId ?? "all"}:${effectiveCampaignId ?? "all"}:${range.from}:${range.to}`}
+          key={`${reportKey}:${effectiveAccountId ?? "all"}:${effectiveCampaignId ?? "all"}:${profileId ?? "all"}:${range.from}:${range.to}`}
           reportKey={reportKey}
           reportLabel={selected?.label ?? ""}
           from={range.from}
           to={range.to}
           accountId={effectiveAccountId}
           campaignId={effectiveCampaignId}
+          profileId={profileId}
           accountLabel={accountLabel}
         />
       </div>

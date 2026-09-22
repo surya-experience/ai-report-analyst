@@ -20,7 +20,11 @@ export default async function ReportsPage() {
       </p>
 
       <ReportBuilder
-        reportOptions={REPORT_DEFINITIONS.map((r) => ({ key: r.key, label: r.label, description: r.description }))}
+        reportOptions={REPORT_DEFINITIONS.filter((r) => r.key !== "profile_statistics").map((r) => ({
+          key: r.key,
+          label: r.label,
+          description: r.description,
+        }))}
         initialExports={exports ?? []}
         accounts={accounts ?? []}
         campaigns={campaigns ?? []}

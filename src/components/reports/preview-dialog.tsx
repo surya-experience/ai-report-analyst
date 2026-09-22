@@ -53,6 +53,7 @@ export function PreviewDialog({
   to,
   accountId,
   campaignId,
+  profileId,
   accountLabel,
   format,
   onExported,
@@ -65,6 +66,7 @@ export function PreviewDialog({
   to: string;
   accountId?: string;
   campaignId?: string;
+  profileId?: string;
   accountLabel?: string;
   format: ExportFormat;
   onExported?: (exportRow: unknown) => void;
@@ -124,12 +126,12 @@ export function PreviewDialog({
       fetch("/api/reports/chart-preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reportKey, from, to, accountId, campaignId }),
+        body: JSON.stringify({ reportKey, from, to, accountId, campaignId, profileId }),
       }).then((r) => r.json()),
       fetch("/api/reports/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reportKey, from, to, accountId, campaignId }),
+        body: JSON.stringify({ reportKey, from, to, accountId, campaignId, profileId }),
       }).then((r) => r.json()),
     ])
       .then(([chartData, previewData]) => {
@@ -150,7 +152,7 @@ export function PreviewDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, reportKey, from, to, accountId, campaignId]);
+  }, [open, reportKey, from, to, accountId, campaignId, profileId]);
 
   const options: { value: ChartType; label: string }[] = [
     { value: "table", label: "Table" },
@@ -214,7 +216,7 @@ export function PreviewDialog({
         const res = await fetch("/api/reports/export", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reportKey, format, from, to, accountId, campaignId, accountLabel }),
+          body: JSON.stringify({ reportKey, format, from, to, accountId, campaignId, profileId, accountLabel }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -271,7 +273,7 @@ export function PreviewDialog({
     const res = await fetch("/api/reports/analyst", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, reportKey, from, to, accountId, campaignId, accountLabel, history, chartContext: data, chartLabel: label }),
+      body: JSON.stringify({ question, reportKey, from, to, accountId, campaignId, profileId, accountLabel, history, chartContext: data, chartLabel: label }),
     });
     const resData = await res.json();
     setChartAsking(false);

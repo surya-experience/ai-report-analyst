@@ -87,7 +87,8 @@ function dayKey(iso: string) {
 async function buildCampaignItems(
   supabase: SupabaseClient<Database>,
   range: DateRange,
-  campaignId?: string
+  campaignId?: string,
+  profileId?: string
 ): Promise<PreviewItem[]> {
   let campaignQuery = supabase
     .from("campaigns")
@@ -101,10 +102,12 @@ async function buildCampaignItems(
 
   const items: PreviewItem[] = [];
   for (const c of campaigns ?? []) {
-    const { data: sends } = await supabase
+    let sendsQuery = supabase
       .from("campaign_sends")
       .select("status, sent_at, opened_at, tier_label, survey_source, anonymous_survey, user_status")
       .eq("campaign_id", c.id);
+    if (profileId) sendsQuery = sendsQuery.eq("profile_id", profileId);
+    const { data: sends } = await sendsQuery;
 
     const rows = sends ?? [];
     const sent = rows.filter((s) => ["sent", "opened", "clicked"].includes(s.status)).length;
@@ -190,14 +193,16 @@ async function buildCampaignItems(
   return items;
 }
 
-async function buildProfileStatItems(supabase: SupabaseClient<Database>, range: DateRange): Promise<PreviewItem[]> {
-  const { data: rows } = await supabase
+async function buildProfileStatItems(supabase: SupabaseClient<Database>, range: DateRange, profileId?: string): Promise<PreviewItem[]> {
+  let query = supabase
     .from("profile_daily_stats")
     .select("*, profiles(name)")
     .gte("stat_date", range.from)
     .lte("stat_date", range.to)
     .order("stat_date", { ascending: true })
     .limit(5000);
+  if (profileId) query = query.eq("profile_id", profileId);
+  const { data: rows } = await query;
 
   const byProfile = new Map<string, { name: string; rows: NonNullable<typeof rows> }>();
   for (const r of rows ?? []) {
@@ -412,12 +417,16 @@ export async function buildChartPreview(
     return {
       mode: "items",
       title: "Campaign Delivery Report",
-      items: await buildCampaignItems(supabase, range, params?.campaignId),
+      items: await buildCampaignItems(supabase, range, params?.campaignId, params?.profileId),
     };
   }
 
   if (reportKey === "profile_statistics") {
-    return { mode: "items", title: "Profile Statistics Report", items: await buildProfileStatItems(supabase, range) };
+    return {
+      mode: "items",
+      title: "Profile Statistics Report",
+      items: await buildProfileStatItems(supabase, range, params?.profileId),
+    };
   }
 
   if (reportKey === "survey_results") {
@@ -427,6 +436,7 @@ export async function buildChartPreview(
       .gte("created_at", range.from)
       .lte("created_at", endOfDay(range.to));
     if (params?.campaignId) responseQuery = responseQuery.eq("surveys.campaign_id", params.campaignId);
+    if (params?.profileId) responseQuery = responseQuery.eq("profile_id", params.profileId);
     const { data } = await responseQuery;
     const rows = data ?? [];
     const categories = [1, 2, 3, 4, 5].map((star) => ({

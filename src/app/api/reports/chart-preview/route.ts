@@ -5,17 +5,18 @@ import { buildChartPreview } from "@/lib/reports/chart-preview";
 
 // SECURITY: no auth check — see README.md "Admin console has no login".
 export async function POST(req: NextRequest) {
-  const { reportKey, from, to, accountId, campaignId } = (await req.json()) as {
+  const { reportKey, from, to, accountId, campaignId, profileId } = (await req.json()) as {
     reportKey: string;
     from: string;
     to: string;
     accountId?: string;
     campaignId?: string;
+    profileId?: string;
   };
   const definition = getReportDefinition(reportKey);
   if (!definition) return NextResponse.json({ error: "Unknown report" }, { status: 400 });
 
   const supabase = createAdminClient();
-  const preview = await buildChartPreview(supabase, reportKey, { from, to }, { accountId, campaignId });
+  const preview = await buildChartPreview(supabase, reportKey, { from, to }, { accountId, campaignId, profileId });
   return NextResponse.json({ preview });
 }

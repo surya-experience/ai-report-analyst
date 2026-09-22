@@ -63,13 +63,14 @@ interface Turn {
 }
 
 export async function POST(req: NextRequest) {
-  const { question, reportKey, from, to, accountId, campaignId, accountLabel, history, chartContext, chartLabel } = (await req.json()) as {
+  const { question, reportKey, from, to, accountId, campaignId, profileId, accountLabel, history, chartContext, chartLabel } = (await req.json()) as {
     question: string;
     reportKey: string;
     from: string;
     to: string;
     accountId?: string;
     campaignId?: string;
+    profileId?: string;
     accountLabel?: string;
     history?: Turn[];
     chartContext?: unknown;
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
 
   const supabase = createAdminClient();
   const defaultRange: DateRange = { from, to };
-  const params = { accountId, campaignId };
+  const params = { accountId, campaignId, profileId };
 
   // Caches fetched report results per distinct range for the lifetime of
   // this one request, so several tool calls against the same range (the

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { MessageCircle, Loader2 } from "lucide-react";
+import { MessageCircle, Loader2, Eraser } from "lucide-react";
 import { CategoryBars, CategoryPie } from "@/components/reports/category-chart";
 import type { ChartCategory } from "@/lib/reports/chart-preview";
 
@@ -80,6 +80,7 @@ export function ReportAnalyst({
   to,
   accountId,
   campaignId,
+  profileId,
   accountLabel,
 }: {
   reportKey: string;
@@ -88,6 +89,7 @@ export function ReportAnalyst({
   to: string;
   accountId?: string;
   campaignId?: string;
+  profileId?: string;
   accountLabel?: string;
 }) {
   const [question, setQuestion] = useState("");
@@ -115,6 +117,7 @@ export function ReportAnalyst({
         to,
         accountId,
         campaignId,
+        profileId,
         accountLabel,
         history,
         chartContext: opts?.chartContext,
@@ -131,14 +134,27 @@ export function ReportAnalyst({
   return (
     <Card className="border-indigo-200">
       <CardContent className="pt-2 space-y-4">
-        <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
-            <MessageCircle className="h-4 w-4 text-indigo-600" />
+        <div className="flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+              <MessageCircle className="h-4 w-4 text-indigo-600" />
+            </div>
+            <div>
+              <p className="font-bold text-sm">Report analyst</p>
+              <p className="text-xs text-muted-foreground">Ask about {reportLabel || "this report"}</p>
+            </div>
           </div>
-          <div>
-            <p className="font-bold text-sm">Report analyst</p>
-            <p className="text-xs text-muted-foreground">Ask about {reportLabel || "this report"}</p>
-          </div>
+          {turns.length > 1 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={() => setTurns([{ role: "assistant", text: openingMessage(reportLabel) }])}
+            >
+              <Eraser className="h-3.5 w-3.5 mr-1.5" />
+              Clear
+            </Button>
+          )}
         </div>
 
         <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
@@ -172,13 +188,13 @@ export function ReportAnalyst({
           )}
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {suggestions.map((s) => (
             <button
               key={s}
               onClick={() => ask(s)}
               disabled={loading}
-              className="text-left text-sm font-medium px-4 py-2.5 rounded-full border bg-muted/40 hover:bg-muted transition-colors disabled:opacity-50"
+              className="text-left text-xs font-medium px-2.5 py-1 rounded-full border bg-muted/40 hover:bg-muted transition-colors disabled:opacity-50"
             >
               {s}
             </button>
