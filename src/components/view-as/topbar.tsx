@@ -15,13 +15,6 @@ export function ViewAsTopbar({ profileName }: { profileName: string }) {
         experience<span className="text-indigo-600">.com</span>
       </Link>
 
-      <div className="inline-flex rounded-full bg-muted p-1 gap-1 text-xs font-semibold shrink-0">
-        <span className="px-3 py-1.5 rounded-full bg-indigo-600 text-white">Member view</span>
-        <Link href="/admin/profiles" className="px-3 py-1.5 rounded-full text-muted-foreground hover:bg-background transition-colors">
-          Admin view
-        </Link>
-      </div>
-
       <div className="flex-1" />
 
       <div className="flex items-center gap-2.5">

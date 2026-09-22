@@ -131,7 +131,12 @@ export async function POST(req: NextRequest) {
 
   const anthropic = getAnthropic();
 
-  for (let iteration = 0; iteration < 4; iteration++) {
+  // 6 rather than 4: a compound question (e.g. "compare August vs
+  // September and chart it") legitimately needs one tool call per range
+  // plus the final answer, and occasionally an extra call to correct a
+  // wrong field guess — 4 was cutting those off with a hard "couldn't
+  // finish in time" instead of an answer.
+  for (let iteration = 0; iteration < 6; iteration++) {
     const response = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 700,

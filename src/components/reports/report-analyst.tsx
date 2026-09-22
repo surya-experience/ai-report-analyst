@@ -57,17 +57,23 @@ function openingMessage(reportLabel: string) {
 
 // A fenced ```chart block (the model's convention for "return structured
 // chart data instead of prose" — see the system prompt) containing
-// {"type":"bar"|"donut"|"pie","categories":[{"label","value"}...]}.
-function parseChartReply(text: string): { type: "bar" | "donut" | "pie"; categories: ChartCategory[] } | null {
+// {"type":"bar"|"donut"|"pie","categories":[{"label","value"}...]}. The
+// system prompt asks for a chart-only reply, but a compound question
+// ("summarize AND chart this") can still get both — so this pulls out
+// whatever text surrounds the fence (trimmed) alongside the chart,
+// instead of the caller assuming a chart match means there's no prose
+// left to show.
+function parseChartReply(text: string): { prose: string; chart: { type: "bar" | "donut" | "pie"; categories: ChartCategory[] } | null } {
   const match = text.match(/```chart\s*([\s\S]*?)```/);
-  if (!match) return null;
+  if (!match) return { prose: text, chart: null };
+  const prose = (text.slice(0, match.index) + text.slice((match.index ?? 0) + match[0].length)).trim();
   try {
     const parsed = JSON.parse(match[1]);
-    if (parsed && Array.isArray(parsed.categories)) return parsed;
+    if (parsed && Array.isArray(parsed.categories) && parsed.categories.length > 0) return { prose, chart: parsed };
   } catch {
-    // Not valid JSON — fall through and render as plain text instead.
+    // Not valid JSON — fall through and render the raw text instead.
   }
-  return null;
+  return { prose: text, chart: null };
 }
 
 // The parent renders this with `key={reportKey}` so switching reports
@@ -159,25 +165,23 @@ export function ReportAnalyst({
 
         <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
           {turns.map((t, i) => {
-            const chart = t.role === "assistant" ? parseChartReply(t.text) : null;
+            const { prose, chart } = t.role === "assistant" ? parseChartReply(t.text) : { prose: t.text, chart: null };
             return (
               <div
                 key={i}
                 className={
                   t.role === "assistant"
-                    ? "bg-amber-50 text-amber-950 rounded-xl px-4 py-3 text-sm leading-relaxed"
+                    ? "bg-amber-50 text-amber-950 rounded-xl px-4 py-3 text-sm leading-relaxed space-y-3"
                     : "bg-indigo-600 text-white rounded-xl px-4 py-3 text-sm leading-relaxed ml-8"
                 }
               >
-                {chart ? (
-                  chart.type === "bar" ? (
+                {prose && <p className="whitespace-pre-wrap">{prose}</p>}
+                {chart &&
+                  (chart.type === "bar" ? (
                     <CategoryBars categories={chart.categories} />
                   ) : (
                     <CategoryPie categories={chart.categories} donut={chart.type === "donut"} />
-                  )
-                ) : (
-                  t.text
-                )}
+                  ))}
               </div>
             );
           })}

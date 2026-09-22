@@ -132,8 +132,15 @@ export function ReportBuilder({
   }
 
   return (
-    <div className="grid lg:grid-cols-[1fr_320px] gap-6 items-start">
-      <div className="space-y-6">
+    // The parent page gives this a definite height (h-full, down from the
+    // admin shell's fixed viewport height) instead of letting it grow to
+    // content — that's what makes `h-full` here mean something real, so
+    // each column can bound its OWN overflow (the left column scrolls in
+    // the rare case its form + analyst don't fit; Recent exports' list
+    // always does) instead of the page never fitting and forcing the
+    // whole admin shell to scroll.
+    <div className="grid lg:grid-cols-[1fr_320px] gap-6 h-full">
+      <div className="space-y-6 lg:h-full lg:overflow-y-auto lg:pr-1">
         <Card>
           <CardContent className="pt-2 space-y-4">
             <div className="grid sm:grid-cols-2 gap-4">
@@ -272,9 +279,9 @@ export function ReportBuilder({
         />
       </div>
 
-      <div className="lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:flex lg:flex-col">
+      <div className="lg:flex lg:flex-col lg:min-h-0">
         <p className="font-bold text-lg mb-3 shrink-0">Recent exports</p>
-        <div className="space-y-3 overflow-y-auto pr-1 lg:min-h-0">
+        <div className="space-y-3 overflow-y-auto pr-1 lg:flex-1 lg:min-h-0">
           {exports.map((e) => (
             <Card key={e.id}>
               <CardContent className="py-3 space-y-1.5">

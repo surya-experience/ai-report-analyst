@@ -21,24 +21,28 @@ export default async function ViewAsReportsPage({ params }: { params: Promise<{ 
   const { data: campaigns } = await supabase.from("campaigns").select("id, name").order("created_at", { ascending: false });
 
   return (
-    <div className="max-w-6xl mx-auto px-8 py-7 space-y-2">
-      <h1 className="text-2xl font-extrabold tracking-tight">Reports</h1>
-      <p className="text-sm text-muted-foreground mb-6">
-        {profile.name}&apos;s reports — export them or ask the analyst what they mean.
-      </p>
+    <div className="max-w-6xl mx-auto px-8 py-7 h-full flex flex-col">
+      <div className="shrink-0 space-y-2 mb-6">
+        <h1 className="text-2xl font-extrabold tracking-tight">Reports</h1>
+        <p className="text-sm text-muted-foreground">
+          {profile.name}&apos;s reports — export them or ask the analyst what they mean.
+        </p>
+      </div>
 
-      <ReportBuilder
-        reportOptions={REPORT_DEFINITIONS.filter((r) => USER_REPORT_KEYS.has(r.key)).map((r) => ({
-          key: r.key,
-          label: r.label,
-          description: r.description,
-        }))}
-        initialExports={[]}
-        accounts={[]}
-        campaigns={campaigns ?? []}
-        profileId={profile.id}
-        profileName={profile.name}
-      />
+      <div className="flex-1 min-h-0">
+        <ReportBuilder
+          reportOptions={REPORT_DEFINITIONS.filter((r) => USER_REPORT_KEYS.has(r.key)).map((r) => ({
+            key: r.key,
+            label: r.label,
+            description: r.description,
+          }))}
+          initialExports={[]}
+          accounts={[]}
+          campaigns={campaigns ?? []}
+          profileId={profile.id}
+          profileName={profile.name}
+        />
+      </div>
     </div>
   );
 }

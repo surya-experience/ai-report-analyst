@@ -13,22 +13,26 @@ export default async function ReportsPage() {
   ]);
 
   return (
-    <div className="max-w-6xl space-y-2">
-      <h1 className="text-2xl font-extrabold tracking-tight">Reports</h1>
-      <p className="text-sm text-muted-foreground mb-6">
-        Build a report from your account data, then export it or ask the analyst what it means.
-      </p>
+    <div className="max-w-6xl h-full flex flex-col">
+      <div className="shrink-0 space-y-2 mb-6">
+        <h1 className="text-2xl font-extrabold tracking-tight">Reports</h1>
+        <p className="text-sm text-muted-foreground">
+          Build a report from your account data, then export it or ask the analyst what it means.
+        </p>
+      </div>
 
-      <ReportBuilder
-        reportOptions={REPORT_DEFINITIONS.filter((r) => r.key !== "profile_statistics").map((r) => ({
-          key: r.key,
-          label: r.label,
-          description: r.description,
-        }))}
-        initialExports={exports ?? []}
-        accounts={accounts ?? []}
-        campaigns={campaigns ?? []}
-      />
+      <div className="flex-1 min-h-0">
+        <ReportBuilder
+          reportOptions={REPORT_DEFINITIONS.filter((r) => r.key !== "profile_statistics").map((r) => ({
+            key: r.key,
+            label: r.label,
+            description: r.description,
+          }))}
+          initialExports={exports ?? []}
+          accounts={accounts ?? []}
+          campaigns={campaigns ?? []}
+        />
+      </div>
     </div>
   );
 }
