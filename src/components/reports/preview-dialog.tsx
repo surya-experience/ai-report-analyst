@@ -10,13 +10,31 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { CategoryBars, CategoryPie } from "@/components/reports/category-chart";
 import { TrendGraph } from "@/components/reports/trend-graph";
 import type { ChartPreview } from "@/lib/reports/chart-preview";
 
-type ChartType = "bar" | "donut" | "pie" | "graph";
+type ChartType = "bar" | "donut" | "pie" | "graph" | "table";
+
+interface TableColumn {
+  key: string;
+  label: string;
+}
+interface TableData {
+  columns: TableColumn[];
+  rows: Record<string, string | number>[];
+  totalRows: number;
+}
 
 export function PreviewDialog({
   open,
@@ -39,6 +57,7 @@ export function PreviewDialog({
 }) {
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<ChartPreview | null>(null);
+  const [tableData, setTableData] = useState<TableData | null>(null);
   const [chartType, setChartType] = useState<ChartType>(isItemModeReport ? "graph" : "bar");
   const [index, setIndex] = useState(0);
 
@@ -46,7 +65,9 @@ export function PreviewDialog({
   // prop itself (not the Dialog's onOpenChange callback) since this dialog
   // is opened externally by the parent setting `open=true` directly, which
   // never invokes onOpenChange (that only fires for the Dialog's own
-  // internal close interactions: overlay click, Escape, etc).
+  // internal close interactions: overlay click, Escape, etc). Both the
+  // chart data and the raw table are fetched up front so switching to the
+  // Table view is instant rather than triggering its own loading state.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -56,15 +77,24 @@ export function PreviewDialog({
     // effect, so it's suppressed for this one line.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
-    fetch("/api/reports/chart-preview", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reportKey, from, to, accountId }),
-    })
-      .then((r) => r.json())
-      .then((data) => {
+    Promise.all([
+      fetch("/api/reports/chart-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reportKey, from, to, accountId }),
+      }).then((r) => r.json()),
+      fetch("/api/reports/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reportKey, from, to, accountId }),
+      }).then((r) => r.json()),
+    ])
+      .then(([chartData, previewData]) => {
         if (cancelled) return;
-        setPreview(data.preview ?? null);
+        setPreview(chartData.preview ?? null);
+        setTableData(
+          previewData.report ? { ...previewData.report, totalRows: previewData.totalRows } : null
+        );
         setChartType(isItemModeReport ? "graph" : "bar");
         setIndex(0);
       })
@@ -77,26 +107,21 @@ export function PreviewDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, reportKey, from, to, accountId]);
 
-  const options: { value: ChartType; label: string }[] =
-    preview?.mode === "items"
-      ? [
-          { value: "bar", label: "Bar" },
-          { value: "donut", label: "Donut" },
-          { value: "pie", label: "Pie" },
-          { value: "graph", label: "Graph" },
-        ]
-      : [
-          { value: "bar", label: "Bar" },
-          { value: "donut", label: "Donut" },
-          { value: "pie", label: "Pie" },
-        ];
+  const options: { value: ChartType; label: string }[] = [
+    { value: "bar", label: "Bar" },
+    { value: "donut", label: "Donut" },
+    { value: "pie", label: "Pie" },
+    ...(preview?.mode === "items" ? [{ value: "graph" as const, label: "Graph" }] : []),
+    { value: "table", label: "Table" },
+  ];
 
   const item = preview?.mode === "items" ? preview.items[index] : null;
   const account = preview?.mode === "breakdowns" ? preview.accounts[index] : null;
+  const wide = preview?.mode === "breakdowns" || chartType === "table";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={preview?.mode === "breakdowns" ? "sm:max-w-3xl" : "sm:max-w-xl"}>
+      <DialogContent className={wide ? "sm:max-w-3xl" : "sm:max-w-xl"}>
         <DialogHeader>
           <DialogTitle>Preview — {reportLabel}</DialogTitle>
         </DialogHeader>
@@ -107,7 +132,47 @@ export function PreviewDialog({
           </div>
         )}
 
-        {!loading && preview?.mode === "aggregate" && (
+        {!loading && chartType === "table" && tableData && (
+          <div className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Showing {tableData.rows.length} of {tableData.totalRows} rows
+            </p>
+            <div className="overflow-x-auto rounded-lg border max-h-[55vh] overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    {tableData.columns.map((c) => (
+                      <TableHead key={c.key} className="whitespace-nowrap">
+                        {c.label}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {tableData.rows.map((row, i) => (
+                    <TableRow key={i}>
+                      {tableData.columns.map((c) => (
+                        <TableCell key={c.key} className="whitespace-nowrap">
+                          {row[c.key]}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                  {tableData.rows.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={tableData.columns.length} className="text-center py-8 text-muted-foreground">
+                        No rows to show.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            <ChartTypeToggle options={options} value={chartType} onChange={setChartType} />
+          </div>
+        )}
+
+        {!loading && chartType !== "table" && preview?.mode === "aggregate" && (
           <div className="space-y-6">
             {chartType === "bar" && <CategoryBars categories={preview.categories} />}
             {chartType === "donut" && <CategoryPie categories={preview.categories} donut />}
@@ -116,7 +181,7 @@ export function PreviewDialog({
           </div>
         )}
 
-        {!loading && preview?.mode === "items" && item && (
+        {!loading && chartType !== "table" && preview?.mode === "items" && item && (
           <div className="space-y-5">
             <div className="flex items-center justify-between">
               <Button
@@ -164,13 +229,13 @@ export function PreviewDialog({
           </div>
         )}
 
-        {!loading && preview?.mode === "items" && preview.items.length === 0 && (
+        {!loading && chartType !== "table" && preview?.mode === "items" && preview.items.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-10">
             No {reportKey === "profile_statistics" ? "profile stats" : "campaigns"} in this date range.
           </p>
         )}
 
-        {!loading && preview?.mode === "breakdowns" && account && (
+        {!loading && chartType !== "table" && preview?.mode === "breakdowns" && account && (
           <div className="space-y-5">
             <div className="flex items-center justify-between">
               <Button
@@ -203,25 +268,15 @@ export function PreviewDialog({
                   <p className="text-xs font-semibold mb-2">{g.label}</p>
                   {chartType === "bar" && <CategoryBars categories={g.categories} />}
                   {chartType === "donut" && <CategoryPie categories={g.categories} donut />}
-                  {(chartType === "pie" || chartType === "graph") && (
-                    <CategoryPie categories={g.categories} donut={false} />
-                  )}
+                  {chartType === "pie" && <CategoryPie categories={g.categories} donut={false} />}
                 </div>
               ))}
             </div>
-            <ChartTypeToggle
-              options={[
-                { value: "bar", label: "Bar" },
-                { value: "donut", label: "Donut" },
-                { value: "pie", label: "Pie" },
-              ]}
-              value={chartType === "graph" ? "pie" : chartType}
-              onChange={setChartType}
-            />
+            <ChartTypeToggle options={options} value={chartType} onChange={setChartType} />
           </div>
         )}
 
-        {!loading && preview?.mode === "breakdowns" && preview.accounts.length === 0 && (
+        {!loading && chartType !== "table" && preview?.mode === "breakdowns" && preview.accounts.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-10">No accounts to show yet.</p>
         )}
 
@@ -243,7 +298,7 @@ function ChartTypeToggle({
   onChange: (v: ChartType) => void;
 }) {
   return (
-    <div className="inline-flex rounded-full bg-muted p-1 gap-1">
+    <div className="inline-flex rounded-full bg-muted p-1 gap-1 flex-wrap">
       {options.map((o) => (
         <button
           key={o.value}
