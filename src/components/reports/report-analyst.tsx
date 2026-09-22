@@ -37,7 +37,8 @@ const SUGGESTIONS_BY_REPORT: Record<string, string[]> = {
   survey_results: [
     "What's the average rating?",
     "How many 5-star responses are there?",
-    "Which survey has the most responses?",
+    "Which agent has the highest average rating?",
+    "Which campaign generated the most responses?",
   ],
   srs_overview: [
     "Which agent has the highest Search Rank Score?",

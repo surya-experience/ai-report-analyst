@@ -265,7 +265,7 @@ const surveyResults: ReportDefinition = {
     // survey and the inner join never drops rows when no filter is set.
     let query = supabase
       .from("survey_responses")
-      .select("*, surveys!inner(name, campaign_id)")
+      .select("*, surveys!inner(name, campaign_id, campaigns(name)), profiles(name)")
       .gte("created_at", range.from)
       .lte("created_at", endOfDay(range.to))
       .order("created_at", { ascending: false })
@@ -274,9 +274,12 @@ const surveyResults: ReportDefinition = {
     if (params?.profileId) query = query.eq("profile_id", params.profileId);
     const { data } = await query;
     const rows = (data ?? []).map((r) => {
-      const survey = r.surveys as unknown as { name: string } | null;
+      const survey = r.surveys as unknown as { name: string; campaigns: { name: string } | null } | null;
+      const profile = r.profiles as unknown as { name: string } | null;
       return {
         survey: survey?.name ?? "—",
+        campaign: survey?.campaigns?.name ?? "—",
+        agent: profile?.name ?? "—",
         respondent: r.respondent_name,
         rating: r.rating,
         comments: r.comments ?? "",
@@ -286,6 +289,8 @@ const surveyResults: ReportDefinition = {
     return {
       columns: [
         { key: "survey", label: "Survey" },
+        { key: "campaign", label: "Campaign" },
+        { key: "agent", label: "Agent" },
         { key: "respondent", label: "Respondent" },
         { key: "rating", label: "Rating" },
         { key: "comments", label: "Comments" },

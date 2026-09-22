@@ -62,7 +62,7 @@ export interface AgentSummary {
 }
 
 export type ChartPreview =
-  | { mode: "aggregate"; title: string; categories: ChartCategory[] }
+  | { mode: "aggregate"; title: string; categories: ChartCategory[]; groups?: ChartBreakdownGroup[] }
   | { mode: "items"; title: string; items: PreviewItem[] }
   // Account Statistics only: one entry per account in scope (just the
   // selected one, or all of them when the filter is "All accounts") —
@@ -432,18 +432,58 @@ export async function buildChartPreview(
   if (reportKey === "survey_results") {
     let responseQuery = supabase
       .from("survey_responses")
-      .select("rating, surveys!inner(campaign_id)")
+      .select("rating, surveys!inner(campaign_id, campaigns(name)), profiles(name)")
       .gte("created_at", range.from)
       .lte("created_at", endOfDay(range.to));
     if (params?.campaignId) responseQuery = responseQuery.eq("surveys.campaign_id", params.campaignId);
     if (params?.profileId) responseQuery = responseQuery.eq("profile_id", params.profileId);
     const { data } = await responseQuery;
-    const rows = data ?? [];
+    const rows = (data ?? []).map((r) => ({
+      rating: r.rating,
+      agent: (r.profiles as unknown as { name: string } | null)?.name ?? "—",
+      campaign: (r.surveys as unknown as { campaigns: { name: string } | null } | null)?.campaigns?.name ?? "—",
+    }));
     const categories = [1, 2, 3, 4, 5].map((star) => ({
       label: `${star}★`,
       value: rows.filter((r) => r.rating === star).length,
     }));
-    return { mode: "aggregate", title: "Rating distribution", categories };
+
+    // Part-to-whole/comparison breakdowns from the real Survey Results
+    // Report's chart-suitable columns (see the "Chart Column Guide" this
+    // app's build history was seeded against): response volume per agent
+    // and per campaign (bar), plus average rating per agent (bar) — the
+    // rating-distribution categories above already cover the donut/pie
+    // case for the rating column itself.
+    const countBy = (values: string[]) => {
+      const counts = new Map<string, number>();
+      for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
+      return [...counts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([label, value]) => ({ label, value }));
+    };
+    const avgByAgent = (() => {
+      const sums = new Map<string, { total: number; count: number }>();
+      for (const r of rows) {
+        const entry = sums.get(r.agent) ?? { total: 0, count: 0 };
+        entry.total += r.rating;
+        entry.count += 1;
+        sums.set(r.agent, entry);
+      }
+      return [...sums.entries()]
+        .sort((a, b) => b[1].total / b[1].count - a[1].total / a[1].count)
+        .map(([label, { total, count }]) => ({ label, value: Math.round((total / count) * 10) / 10 }));
+    })();
+
+    const groups: ChartBreakdownGroup[] =
+      rows.length === 0
+        ? []
+        : [
+            { label: "Responses by agent", categories: countBy(rows.map((r) => r.agent)) },
+            { label: "Responses by campaign", categories: countBy(rows.map((r) => r.campaign)) },
+            { label: "Average rating by agent", categories: avgByAgent },
+          ];
+
+    return { mode: "aggregate", title: "Rating distribution", categories, groups };
   }
 
   if (reportKey === "srs_overview") {

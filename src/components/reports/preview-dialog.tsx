@@ -173,7 +173,12 @@ export function PreviewDialog({
   function chartCells(): { label: string; region: ChartRegion }[] {
     if (!preview || chartType === "table") return [];
     if (preview.mode === "aggregate") {
-      return [{ label: preview.title, region: toRegion(chartType as "bar" | "donut" | "pie", preview.categories) }];
+      const primary = { label: preview.title, region: toRegion(chartType as "bar" | "donut" | "pie", preview.categories) };
+      const groupCells = (preview.groups ?? []).map((g) => ({
+        label: g.label,
+        region: toRegion(chartType as "bar" | "donut" | "pie", g.categories),
+      }));
+      return [primary, ...groupCells];
     }
     if (preview.mode === "items" && item) {
       if (chartType === "graph") {
@@ -344,10 +349,25 @@ export function PreviewDialog({
         )}
 
         {!loading && chartType !== "table" && preview?.mode === "aggregate" && (
-          <div className="space-y-6">
-            {chartType === "bar" && <CategoryBars categories={preview.categories} />}
-            {chartType === "donut" && <CategoryPie categories={preview.categories} donut />}
-            {chartType === "pie" && <CategoryPie categories={preview.categories} donut={false} />}
+          <div className="space-y-5">
+            <div>
+              <p className="text-xs font-semibold mb-2">{preview.title}</p>
+              {chartType === "bar" && <CategoryBars categories={preview.categories} />}
+              {chartType === "donut" && <CategoryPie categories={preview.categories} donut />}
+              {chartType === "pie" && <CategoryPie categories={preview.categories} donut={false} />}
+            </div>
+            {preview.groups && preview.groups.length > 0 && (
+              <div className="grid sm:grid-cols-2 gap-5 max-h-[40vh] overflow-y-auto pr-1">
+                {preview.groups.map((g) => (
+                  <div key={g.label} className="rounded-lg border p-3">
+                    <p className="text-xs font-semibold mb-2">{g.label}</p>
+                    {chartType === "bar" && <CategoryBars categories={g.categories} />}
+                    {chartType === "donut" && <CategoryPie categories={g.categories} donut />}
+                    {chartType === "pie" && <CategoryPie categories={g.categories} donut={false} />}
+                  </div>
+                ))}
+              </div>
+            )}
             <ToolbarRow options={options} value={chartType} onChange={(v) => { setChartType(v); setChartTurns([]); }} onDownload={handleDownload} downloading={downloading} chartTurns={chartTurns} chartAsking={chartAsking} chartFollowUp={chartFollowUp} onChartFollowUpChange={setChartFollowUp} onAsk={askChartQuestion} />
           </div>
         )}
