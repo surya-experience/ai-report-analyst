@@ -13,7 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Loader2, Download, Eye } from "lucide-react";
-import { ReportAnalyst, type ChartAnalysisRequest } from "@/components/reports/report-analyst";
+import { ReportAnalyst } from "@/components/reports/report-analyst";
 import { PreviewDialog } from "@/components/reports/preview-dialog";
 
 interface ReportOption {
@@ -84,7 +84,6 @@ export function ReportBuilder({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exports, setExports] = useState(initialExports);
-  const [chartAnalysisRequest, setChartAnalysisRequest] = useState<ChartAnalysisRequest | null>(null);
 
   const range = { from: customFrom, to: customTo };
   const selected = reportOptions.find((r) => r.key === reportKey);
@@ -245,12 +244,6 @@ export function ReportBuilder({
           accountLabel={accountLabel}
           format={format as "xlsx" | "csv"}
           onExported={(row) => setExports((prev) => [row as ExportRow, ...prev])}
-          onAnalyzeChart={(req) => {
-            // Close the modal so the analyst's reply (rendered in the page,
-            // not the dialog) is actually visible.
-            setPreviewOpen(false);
-            setChartAnalysisRequest(req);
-          }}
         />
 
         <ReportAnalyst
@@ -262,8 +255,6 @@ export function ReportBuilder({
           accountId={effectiveAccountId}
           campaignId={effectiveCampaignId}
           accountLabel={accountLabel}
-          chartAnalysisRequest={chartAnalysisRequest}
-          onChartAnalysisHandled={() => setChartAnalysisRequest(null)}
         />
       </div>
 

@@ -9,6 +9,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -55,7 +56,6 @@ export function PreviewDialog({
   accountLabel,
   format,
   onExported,
-  onAnalyzeChart,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -68,7 +68,6 @@ export function PreviewDialog({
   accountLabel?: string;
   format: ExportFormat;
   onExported?: (exportRow: unknown) => void;
-  onAnalyzeChart?: (req: { question: string; data: unknown; label?: string }) => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -96,6 +95,14 @@ export function PreviewDialog({
     return () => observer.disconnect();
   }, []);
   const [agentFocus, setAgentFocus] = useState("all");
+  // "Analyze this chart" answers live inline in the dialog (not the page's
+  // separate Report analyst chat) so the click stays put instead of closing
+  // the dialog and jumping the page down to a different panel. Reset
+  // whenever the chart on screen changes, since a prior answer would no
+  // longer describe what's showing.
+  const [chartTurns, setChartTurns] = useState<{ role: "user" | "assistant"; text: string }[]>([]);
+  const [chartAsking, setChartAsking] = useState(false);
+  const [chartFollowUp, setChartFollowUp] = useState("");
 
   // Fetches whenever the dialog transitions to open — driven off the `open`
   // prop itself (not the Dialog's onOpenChange callback) since this dialog
@@ -135,6 +142,7 @@ export function PreviewDialog({
         setIndex(0);
         setAgentMetric("search_rank_score");
         setAgentFocus("all");
+        setChartTurns([]);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -243,10 +251,9 @@ export function PreviewDialog({
     downloadChartsAsPng(filename, subtitle ? `${reportLabel} — ${subtitle}` : reportLabel, cells);
   }
 
-  function handleAnalyzeChart() {
-    if (!onAnalyzeChart) return;
+  async function askChartQuestion(question: string) {
     const cells = chartCells();
-    if (cells.length === 0) return;
+    if (cells.length === 0 || chartAsking) return;
     // A small, already-aggregated snapshot of exactly what's on screen —
     // not a fresh DB fetch — so the analyst can explain this chart for
     // free before deciding whether it needs to query for more.
@@ -257,11 +264,18 @@ export function PreviewDialog({
         : { categories: c.region.categories }),
     }));
     const subtitle = item?.name ?? account?.name;
-    onAnalyzeChart({
-      question: "Analyze this chart: explain trends, spikes, drops, outliers, and any notable comparisons, concisely.",
-      data,
-      label: subtitle ? `${reportLabel} — ${subtitle}` : reportLabel,
+    const label = subtitle ? `${reportLabel} — ${subtitle}` : reportLabel;
+    const history = chartTurns.map((t) => ({ role: t.role, text: t.text }));
+    setChartTurns((t) => [...t, { role: "user", text: question }]);
+    setChartAsking(true);
+    const res = await fetch("/api/reports/analyst", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, reportKey, from, to, accountId, campaignId, accountLabel, history, chartContext: data, chartLabel: label }),
     });
+    const resData = await res.json();
+    setChartAsking(false);
+    setChartTurns((t) => [...t, { role: "assistant", text: res.ok ? resData.answer : `Error: ${resData.error}` }]);
   }
 
   return (
@@ -323,7 +337,7 @@ export function PreviewDialog({
                 </TableBody>
               </Table>
             </div>
-            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} onAnalyze={onAnalyzeChart ? handleAnalyzeChart : undefined} />
+            <ToolbarRow options={options} value={chartType} onChange={(v) => { setChartType(v); setChartTurns([]); }} onDownload={handleDownload} downloading={downloading} chartTurns={chartTurns} chartAsking={chartAsking} chartFollowUp={chartFollowUp} onChartFollowUpChange={setChartFollowUp} onAsk={askChartQuestion} />
           </div>
         )}
 
@@ -332,7 +346,7 @@ export function PreviewDialog({
             {chartType === "bar" && <CategoryBars categories={preview.categories} />}
             {chartType === "donut" && <CategoryPie categories={preview.categories} donut />}
             {chartType === "pie" && <CategoryPie categories={preview.categories} donut={false} />}
-            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} onAnalyze={onAnalyzeChart ? handleAnalyzeChart : undefined} />
+            <ToolbarRow options={options} value={chartType} onChange={(v) => { setChartType(v); setChartTurns([]); }} onDownload={handleDownload} downloading={downloading} chartTurns={chartTurns} chartAsking={chartAsking} chartFollowUp={chartFollowUp} onChartFollowUpChange={setChartFollowUp} onAsk={askChartQuestion} />
           </div>
         )}
 
@@ -344,7 +358,7 @@ export function PreviewDialog({
                 size="icon"
                 className={NAV_BUTTON_CLASS}
                 disabled={index === 0}
-                onClick={() => setIndex((i) => Math.max(0, i - 1))}
+                onClick={() => { setIndex((i) => Math.max(0, i - 1)); setChartTurns([]); }}
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -360,7 +374,7 @@ export function PreviewDialog({
                 size="icon"
                 className={NAV_BUTTON_CLASS}
                 disabled={index === preview.items.length - 1}
-                onClick={() => setIndex((i) => Math.min(preview.items.length - 1, i + 1))}
+                onClick={() => { setIndex((i) => Math.min(preview.items.length - 1, i + 1)); setChartTurns([]); }}
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -398,7 +412,7 @@ export function PreviewDialog({
             )}
             {chartType === "graph" && <TrendGraph series={item.series} seriesKeys={item.seriesKeys} />}
 
-            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} onAnalyze={onAnalyzeChart ? handleAnalyzeChart : undefined} />
+            <ToolbarRow options={options} value={chartType} onChange={(v) => { setChartType(v); setChartTurns([]); }} onDownload={handleDownload} downloading={downloading} chartTurns={chartTurns} chartAsking={chartAsking} chartFollowUp={chartFollowUp} onChartFollowUpChange={setChartFollowUp} onAsk={askChartQuestion} />
           </div>
         )}
 
@@ -416,7 +430,7 @@ export function PreviewDialog({
                 size="icon"
                 className={NAV_BUTTON_CLASS}
                 disabled={index === 0}
-                onClick={() => setIndex((i) => Math.max(0, i - 1))}
+                onClick={() => { setIndex((i) => Math.max(0, i - 1)); setChartTurns([]); }}
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -431,7 +445,7 @@ export function PreviewDialog({
                 size="icon"
                 className={NAV_BUTTON_CLASS}
                 disabled={index === preview.accounts.length - 1}
-                onClick={() => setIndex((i) => Math.min(preview.accounts.length - 1, i + 1))}
+                onClick={() => { setIndex((i) => Math.min(preview.accounts.length - 1, i + 1)); setChartTurns([]); }}
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -447,7 +461,7 @@ export function PreviewDialog({
                 </div>
               ))}
             </div>
-            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} onAnalyze={onAnalyzeChart ? handleAnalyzeChart : undefined} />
+            <ToolbarRow options={options} value={chartType} onChange={(v) => { setChartType(v); setChartTurns([]); }} onDownload={handleDownload} downloading={downloading} chartTurns={chartTurns} chartAsking={chartAsking} chartFollowUp={chartFollowUp} onChartFollowUpChange={setChartFollowUp} onAsk={askChartQuestion} />
           </div>
         )}
 
@@ -463,7 +477,7 @@ export function PreviewDialog({
           <div className="space-y-4">
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-1.5">Metric</p>
-              <Select value={agentMetric} onValueChange={setAgentMetric}>
+              <Select value={agentMetric} onValueChange={(v) => { setAgentMetric(v); setChartTurns([]); }}>
                 <SelectTrigger className="w-full sm:w-72">
                   <SelectValue />
                 </SelectTrigger>
@@ -479,7 +493,7 @@ export function PreviewDialog({
             <div className="max-h-[45vh] overflow-y-auto pr-1">
               <CategoryBars categories={preview.agents.map((a) => ({ label: a.name, value: a.metrics[agentMetric] ?? 0 }))} />
             </div>
-            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} onAnalyze={onAnalyzeChart ? handleAnalyzeChart : undefined} />
+            <ToolbarRow options={options} value={chartType} onChange={(v) => { setChartType(v); setChartTurns([]); }} onDownload={handleDownload} downloading={downloading} chartTurns={chartTurns} chartAsking={chartAsking} chartFollowUp={chartFollowUp} onChartFollowUpChange={setChartFollowUp} onAsk={askChartQuestion} />
           </div>
         )}
 
@@ -487,7 +501,7 @@ export function PreviewDialog({
           <div className="space-y-4">
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-1.5">Agent</p>
-              <Select value={agentFocus} onValueChange={setAgentFocus}>
+              <Select value={agentFocus} onValueChange={(v) => { setAgentFocus(v); setChartTurns([]); }}>
                 <SelectTrigger className="w-full sm:w-72">
                   <SelectValue />
                 </SelectTrigger>
@@ -509,7 +523,7 @@ export function PreviewDialog({
                 donut={chartType === "donut"}
               />
             )}
-            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} onAnalyze={onAnalyzeChart ? handleAnalyzeChart : undefined} />
+            <ToolbarRow options={options} value={chartType} onChange={(v) => { setChartType(v); setChartTurns([]); }} onDownload={handleDownload} downloading={downloading} chartTurns={chartTurns} chartAsking={chartAsking} chartFollowUp={chartFollowUp} onChartFollowUpChange={setChartFollowUp} onAsk={askChartQuestion} />
           </div>
         )}
 
@@ -524,37 +538,85 @@ export function PreviewDialog({
   );
 }
 
+const ANALYZE_QUESTION = "Analyze this chart: explain trends, spikes, drops, outliers, and any notable comparisons, concisely.";
+
 function ToolbarRow({
   options,
   value,
   onChange,
   onDownload,
   downloading,
-  onAnalyze,
+  chartTurns,
+  chartAsking,
+  chartFollowUp,
+  onChartFollowUpChange,
+  onAsk,
 }: {
   options: { value: ChartType; label: string }[];
   value: ChartType;
   onChange: (v: ChartType) => void;
   onDownload: () => void;
   downloading: boolean;
-  onAnalyze?: () => void;
+  chartTurns: { role: "user" | "assistant"; text: string }[];
+  chartAsking: boolean;
+  chartFollowUp: string;
+  onChartFollowUpChange: (v: string) => void;
+  onAsk: (question: string) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 flex-wrap">
-      <ChartTypeToggle options={options} value={value} onChange={onChange} />
-      <div className="flex items-center gap-2">
-        {value !== "table" && onAnalyze && (
-          <Button variant="outline" size="sm" onClick={onAnalyze}>
-            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-            Analyze this chart
+    <>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <ChartTypeToggle options={options} value={value} onChange={onChange} />
+        <div className="flex items-center gap-2">
+          {value !== "table" && chartTurns.length === 0 && (
+            <Button variant="outline" size="sm" onClick={() => onAsk(ANALYZE_QUESTION)} disabled={chartAsking}>
+              {chartAsking ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
+              Analyze this chart
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={onDownload} disabled={downloading}>
+            {downloading ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}
+            {value === "table" ? "Download report" : "Download chart"}
           </Button>
-        )}
-        <Button variant="outline" size="sm" onClick={onDownload} disabled={downloading}>
-          {downloading ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}
-          {value === "table" ? "Download report" : "Download chart"}
-        </Button>
+        </div>
       </div>
-    </div>
+
+      {value !== "table" && chartTurns.length > 0 && (
+        <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 p-3 space-y-2.5">
+          {chartTurns.map((t, i) => (
+            <p key={i} className={t.role === "assistant" ? "text-sm text-indigo-950 leading-relaxed" : "text-sm font-semibold text-indigo-700"}>
+              {t.role === "user" ? `You: ${t.text}` : t.text}
+            </p>
+          ))}
+          {chartAsking && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Thinking…
+            </div>
+          )}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const q = chartFollowUp.trim();
+              if (!q || chartAsking) return;
+              onAsk(q);
+              onChartFollowUpChange("");
+            }}
+            className="flex gap-2 pt-1"
+          >
+            <Input
+              value={chartFollowUp}
+              onChange={(e) => onChartFollowUpChange(e.target.value)}
+              placeholder="Ask a follow-up…"
+              disabled={chartAsking}
+              className="h-8 text-sm"
+            />
+            <Button type="submit" size="sm" disabled={chartAsking || !chartFollowUp.trim()}>
+              Ask
+            </Button>
+          </form>
+        </div>
+      )}
+    </>
   );
 }
 

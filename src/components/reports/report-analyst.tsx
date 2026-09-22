@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,12 +11,6 @@ import type { ChartCategory } from "@/lib/reports/chart-preview";
 interface Turn {
   role: "assistant" | "user";
   text: string;
-}
-
-export interface ChartAnalysisRequest {
-  question: string;
-  data: unknown;
-  label?: string;
 }
 
 // Generic examples from the same family as the ones product asked for
@@ -87,8 +81,6 @@ export function ReportAnalyst({
   accountId,
   campaignId,
   accountLabel,
-  chartAnalysisRequest,
-  onChartAnalysisHandled,
 }: {
   reportKey: string;
   reportLabel: string;
@@ -97,10 +89,6 @@ export function ReportAnalyst({
   accountId?: string;
   campaignId?: string;
   accountLabel?: string;
-  // Set by the preview dialog's "Analyze this chart" button; consumed
-  // once (via onChartAnalysisHandled) so it doesn't re-fire.
-  chartAnalysisRequest?: ChartAnalysisRequest | null;
-  onChartAnalysisHandled?: () => void;
 }) {
   const [question, setQuestion] = useState("");
   const [turns, setTurns] = useState<Turn[]>([{ role: "assistant", text: openingMessage(reportLabel) }]);
@@ -137,19 +125,6 @@ export function ReportAnalyst({
     setLoading(false);
     setTurns((t) => [...t, { role: "assistant", text: res.ok ? data.answer : `Error: ${data.error}` }]);
   }
-
-  useEffect(() => {
-    if (!chartAnalysisRequest) return;
-    // Same "effect synchronizes with an external system" case as
-    // preview-dialog.tsx's fetch effect — driven by a prop the parent
-    // sets externally (a button click elsewhere), not a state reset.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    ask(chartAnalysisRequest.question, { chartContext: chartAnalysisRequest.data, chartLabel: chartAnalysisRequest.label });
-    onChartAnalysisHandled?.();
-    // ask()/onChartAnalysisHandled are stable enough for this — re-running
-    // on every render would just resend the same already-consumed request.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chartAnalysisRequest]);
 
   const suggestions = SUGGESTIONS_BY_REPORT[reportKey] ?? ["Summarize this report.", "What stands out most in this data?"];
 

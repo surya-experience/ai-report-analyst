@@ -9,12 +9,12 @@ import { AdminSidebar } from "@/components/admin/sidebar";
 // there is no user session for RLS to authorize against.
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
-    <>
+    <div className="h-dvh flex flex-col overflow-hidden">
       <Topbar />
       <div className="flex flex-1 min-h-0">
         <AdminSidebar role="admin" />
-        <main className="flex-1 min-w-0 px-8 py-7">{children}</main>
+        <main className="flex-1 min-w-0 px-8 py-7 overflow-y-auto">{children}</main>
       </div>
-    </>
+    </div>
   );
 }
