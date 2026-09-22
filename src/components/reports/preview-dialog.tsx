@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Loader2, ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight, Download, Sparkles } from "lucide-react";
 import { CategoryBars, CategoryPie } from "@/components/reports/category-chart";
 import { TrendGraph } from "@/components/reports/trend-graph";
 import type { ChartCategory, ChartPreview } from "@/lib/reports/chart-preview";
@@ -55,6 +55,7 @@ export function PreviewDialog({
   accountLabel,
   format,
   onExported,
+  onAnalyzeChart,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -67,6 +68,7 @@ export function PreviewDialog({
   accountLabel?: string;
   format: ExportFormat;
   onExported?: (exportRow: unknown) => void;
+  onAnalyzeChart?: (req: { question: string; data: unknown; label?: string }) => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -241,6 +243,27 @@ export function PreviewDialog({
     downloadChartsAsPng(filename, subtitle ? `${reportLabel} — ${subtitle}` : reportLabel, cells);
   }
 
+  function handleAnalyzeChart() {
+    if (!onAnalyzeChart) return;
+    const cells = chartCells();
+    if (cells.length === 0) return;
+    // A small, already-aggregated snapshot of exactly what's on screen —
+    // not a fresh DB fetch — so the analyst can explain this chart for
+    // free before deciding whether it needs to query for more.
+    const data = cells.map((c) => ({
+      label: c.label,
+      ...(c.region.type === "line"
+        ? { series: c.region.series, seriesKeys: c.region.seriesKeys.map((s) => ({ key: s.key, label: s.label })) }
+        : { categories: c.region.categories }),
+    }));
+    const subtitle = item?.name ?? account?.name;
+    onAnalyzeChart({
+      question: "Analyze this chart: explain trends, spikes, drops, outliers, and any notable comparisons, concisely.",
+      data,
+      label: subtitle ? `${reportLabel} — ${subtitle}` : reportLabel,
+    });
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl min-w-0" closeButtonClassName={NAV_BUTTON_CLASS}>
@@ -300,7 +323,7 @@ export function PreviewDialog({
                 </TableBody>
               </Table>
             </div>
-            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} />
+            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} onAnalyze={onAnalyzeChart ? handleAnalyzeChart : undefined} />
           </div>
         )}
 
@@ -309,7 +332,7 @@ export function PreviewDialog({
             {chartType === "bar" && <CategoryBars categories={preview.categories} />}
             {chartType === "donut" && <CategoryPie categories={preview.categories} donut />}
             {chartType === "pie" && <CategoryPie categories={preview.categories} donut={false} />}
-            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} />
+            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} onAnalyze={onAnalyzeChart ? handleAnalyzeChart : undefined} />
           </div>
         )}
 
@@ -375,7 +398,7 @@ export function PreviewDialog({
             )}
             {chartType === "graph" && <TrendGraph series={item.series} seriesKeys={item.seriesKeys} />}
 
-            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} />
+            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} onAnalyze={onAnalyzeChart ? handleAnalyzeChart : undefined} />
           </div>
         )}
 
@@ -424,7 +447,7 @@ export function PreviewDialog({
                 </div>
               ))}
             </div>
-            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} />
+            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} onAnalyze={onAnalyzeChart ? handleAnalyzeChart : undefined} />
           </div>
         )}
 
@@ -456,7 +479,7 @@ export function PreviewDialog({
             <div className="max-h-[45vh] overflow-y-auto pr-1">
               <CategoryBars categories={preview.agents.map((a) => ({ label: a.name, value: a.metrics[agentMetric] ?? 0 }))} />
             </div>
-            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} />
+            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} onAnalyze={onAnalyzeChart ? handleAnalyzeChart : undefined} />
           </div>
         )}
 
@@ -486,7 +509,7 @@ export function PreviewDialog({
                 donut={chartType === "donut"}
               />
             )}
-            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} />
+            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} onAnalyze={onAnalyzeChart ? handleAnalyzeChart : undefined} />
           </div>
         )}
 
@@ -507,20 +530,30 @@ function ToolbarRow({
   onChange,
   onDownload,
   downloading,
+  onAnalyze,
 }: {
   options: { value: ChartType; label: string }[];
   value: ChartType;
   onChange: (v: ChartType) => void;
   onDownload: () => void;
   downloading: boolean;
+  onAnalyze?: () => void;
 }) {
   return (
     <div className="flex items-center justify-between gap-3 flex-wrap">
       <ChartTypeToggle options={options} value={value} onChange={onChange} />
-      <Button variant="outline" size="sm" onClick={onDownload} disabled={downloading}>
-        {downloading ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}
-        {value === "table" ? "Download report" : "Download chart"}
-      </Button>
+      <div className="flex items-center gap-2">
+        {value !== "table" && onAnalyze && (
+          <Button variant="outline" size="sm" onClick={onAnalyze}>
+            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+            Analyze this chart
+          </Button>
+        )}
+        <Button variant="outline" size="sm" onClick={onDownload} disabled={downloading}>
+          {downloading ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}
+          {value === "table" ? "Download report" : "Download chart"}
+        </Button>
+      </div>
     </div>
   );
 }

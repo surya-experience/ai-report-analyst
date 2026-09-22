@@ -1,24 +1,79 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, Loader2 } from "lucide-react";
+import { CategoryBars, CategoryPie } from "@/components/reports/category-chart";
+import type { ChartCategory } from "@/lib/reports/chart-preview";
 
 interface Turn {
   role: "assistant" | "user";
   text: string;
 }
 
-const SUGGESTIONS = [
-  "Why don't I see an account I expect?",
-  "Does this report cover a date range?",
-  "What formats can I export this in?",
-];
+export interface ChartAnalysisRequest {
+  question: string;
+  data: unknown;
+  label?: string;
+}
+
+// Generic examples from the same family as the ones product asked for
+// ("What is the total number of reviews?" / "How many responses came from
+// California?" / "What was the NPS last month?" / "Which agent had the
+// highest score?"), reworded per report so they're real, askable questions
+// against this app's actual columns.
+const SUGGESTIONS_BY_REPORT: Record<string, string[]> = {
+  account_statistics: [
+    "Which account has the most active campaigns?",
+    "What's the average completion rate across accounts?",
+    "How many accounts have missing GMB listings?",
+  ],
+  campaign_delivery: [
+    "How many sends were completed vs. still pending?",
+    "Which agent handled the most sends?",
+    "Compare survey sources — which is most common?",
+  ],
+  campaign_statistics: [
+    "Which campaign has the highest open rate?",
+    "What's the total number of sends across all campaigns?",
+    "Compare this campaign's clicks to last month.",
+  ],
+  survey_results: [
+    "What's the average rating?",
+    "How many 5-star responses are there?",
+    "Which survey has the most responses?",
+  ],
+  srs_overview: [
+    "Which agent has the highest Search Rank Score?",
+    "What percentage of agents are Top 5%?",
+    "Compare two agents' scores.",
+  ],
+  profile_statistics: [
+    "Which profile has the most views?",
+    "What's the average Search Rank Score?",
+    "How has this profile's score changed over time?",
+  ],
+};
 
 function openingMessage(reportLabel: string) {
-  return `Hi, I'm your report analyst. Ask about your numbers, or how ${reportLabel || "this report"} works — what a column means, why something's missing, or what format you can export in.`;
+  return `Hi, I'm your report analyst. Ask me anything about ${reportLabel || "this report"}'s data — totals, comparisons, trends, or click a chart and ask me to analyze it.`;
+}
+
+// A fenced ```chart block (the model's convention for "return structured
+// chart data instead of prose" — see the system prompt) containing
+// {"type":"bar"|"donut"|"pie","categories":[{"label","value"}...]}.
+function parseChartReply(text: string): { type: "bar" | "donut" | "pie"; categories: ChartCategory[] } | null {
+  const match = text.match(/```chart\s*([\s\S]*?)```/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[1]);
+    if (parsed && Array.isArray(parsed.categories)) return parsed;
+  } catch {
+    // Not valid JSON — fall through and render as plain text instead.
+  }
+  return null;
 }
 
 // The parent renders this with `key={reportKey}` so switching reports
@@ -31,6 +86,9 @@ export function ReportAnalyst({
   to,
   accountId,
   campaignId,
+  accountLabel,
+  chartAnalysisRequest,
+  onChartAnalysisHandled,
 }: {
   reportKey: string;
   reportLabel: string;
@@ -38,26 +96,62 @@ export function ReportAnalyst({
   to: string;
   accountId?: string;
   campaignId?: string;
+  accountLabel?: string;
+  // Set by the preview dialog's "Analyze this chart" button; consumed
+  // once (via onChartAnalysisHandled) so it doesn't re-fire.
+  chartAnalysisRequest?: ChartAnalysisRequest | null;
+  onChartAnalysisHandled?: () => void;
 }) {
   const [question, setQuestion] = useState("");
   const [turns, setTurns] = useState<Turn[]>([{ role: "assistant", text: openingMessage(reportLabel) }]);
   const [loading, setLoading] = useState(false);
 
-  async function ask(q: string) {
+  async function ask(q: string, opts?: { chartContext?: unknown; chartLabel?: string }) {
     const text = q.trim();
     if (!text || loading) return;
     setLoading(true);
     setQuestion("");
+    // Prior turns only — the new question is sent separately below, so
+    // the server can tell "first turn" (send full Context) from a
+    // follow-up (Question only, reusing context already in the
+    // transcript) per the token-efficient prompt design.
+    const history = turns.map((t) => ({ role: t.role, text: t.text }));
     setTurns((t) => [...t, { role: "user", text }]);
     const res = await fetch("/api/reports/analyst", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: text, reportKey, from, to, accountId, campaignId }),
+      body: JSON.stringify({
+        question: text,
+        reportKey,
+        from,
+        to,
+        accountId,
+        campaignId,
+        accountLabel,
+        history,
+        chartContext: opts?.chartContext,
+        chartLabel: opts?.chartLabel,
+      }),
     });
     const data = await res.json();
     setLoading(false);
     setTurns((t) => [...t, { role: "assistant", text: res.ok ? data.answer : `Error: ${data.error}` }]);
   }
+
+  useEffect(() => {
+    if (!chartAnalysisRequest) return;
+    // Same "effect synchronizes with an external system" case as
+    // preview-dialog.tsx's fetch effect — driven by a prop the parent
+    // sets externally (a button click elsewhere), not a state reset.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    ask(chartAnalysisRequest.question, { chartContext: chartAnalysisRequest.data, chartLabel: chartAnalysisRequest.label });
+    onChartAnalysisHandled?.();
+    // ask()/onChartAnalysisHandled are stable enough for this — re-running
+    // on every render would just resend the same already-consumed request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chartAnalysisRequest]);
+
+  const suggestions = SUGGESTIONS_BY_REPORT[reportKey] ?? ["Summarize this report.", "What stands out most in this data?"];
 
   return (
     <Card className="border-indigo-200">
@@ -73,18 +167,29 @@ export function ReportAnalyst({
         </div>
 
         <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-          {turns.map((t, i) => (
-            <div
-              key={i}
-              className={
-                t.role === "assistant"
-                  ? "bg-amber-50 text-amber-950 rounded-xl px-4 py-3 text-sm leading-relaxed"
-                  : "bg-indigo-600 text-white rounded-xl px-4 py-3 text-sm leading-relaxed ml-8"
-              }
-            >
-              {t.text}
-            </div>
-          ))}
+          {turns.map((t, i) => {
+            const chart = t.role === "assistant" ? parseChartReply(t.text) : null;
+            return (
+              <div
+                key={i}
+                className={
+                  t.role === "assistant"
+                    ? "bg-amber-50 text-amber-950 rounded-xl px-4 py-3 text-sm leading-relaxed"
+                    : "bg-indigo-600 text-white rounded-xl px-4 py-3 text-sm leading-relaxed ml-8"
+                }
+              >
+                {chart ? (
+                  chart.type === "bar" ? (
+                    <CategoryBars categories={chart.categories} />
+                  ) : (
+                    <CategoryPie categories={chart.categories} donut={chart.type === "donut"} />
+                  )
+                ) : (
+                  t.text
+                )}
+              </div>
+            );
+          })}
           {loading && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground px-1">
               <Loader2 className="h-3.5 w-3.5 animate-spin" /> Thinking…
@@ -93,7 +198,7 @@ export function ReportAnalyst({
         </div>
 
         <div className="flex flex-col gap-2">
-          {SUGGESTIONS.map((s) => (
+          {suggestions.map((s) => (
             <button
               key={s}
               onClick={() => ask(s)}
