@@ -29,7 +29,12 @@ export default async function DashboardPage() {
     <>
       <Topbar />
       <main className="flex-1 mx-auto w-full max-w-3xl px-6 py-10">
-        <h1 className="text-2xl font-extrabold tracking-tight mb-1">Your dashboard</h1>
+        <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+          <h1 className="text-2xl font-extrabold tracking-tight">Your dashboard</h1>
+          <Link href="/dashboard/support" className="text-sm font-medium text-indigo-600 hover:underline">
+            Need help? Contact support
+          </Link>
+        </div>
         <p className="text-muted-foreground text-sm mb-8">Signed in as {user.email}</p>
 
         {!profile ? (
