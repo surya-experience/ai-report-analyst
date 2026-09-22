@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { buildReportData } from "@/lib/reports/data";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusPie, CompletenessBars, WeeklyLine, ProfessionBars } from "@/components/reports/charts";
@@ -15,7 +15,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function ReportsPage() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const report = await buildReportData(supabase);
 
   return (

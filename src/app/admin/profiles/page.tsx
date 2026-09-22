@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -23,7 +23,7 @@ export default async function AdminProfilesPage({
 }) {
   const { q, status, page: pageStr } = await searchParams;
   const page = Math.max(1, parseInt(pageStr ?? "1", 10) || 1);
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   let query = supabase.from("profiles").select("*", { count: "exact" });
   if (status && status !== "all") {

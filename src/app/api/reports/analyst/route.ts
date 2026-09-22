@@ -1,21 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { requireStaff } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { buildReportData } from "@/lib/reports/data";
 import { getAnthropic, CLAUDE_MODEL } from "@/lib/ai/anthropic";
 import type Anthropic from "@anthropic-ai/sdk";
 
+// SECURITY: no auth check — see README.md "Admin console has no login".
 export async function POST(req: NextRequest) {
-  try {
-    await requireStaff();
-  } catch {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   const { question } = (await req.json()) as { question: string };
   if (!question?.trim()) return NextResponse.json({ error: "question is required" }, { status: 400 });
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const report = await buildReportData(supabase);
 
   const anthropic = getAnthropic();

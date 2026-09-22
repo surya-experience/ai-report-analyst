@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { SupportChat } from "@/components/support/support-chat";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export default async function AdminSupportConversationPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const [{ data: convo }, { data: messages }] = await Promise.all([
     supabase.from("support_conversations").select("*").eq("id", id).single(),
     supabase.from("support_messages").select("*").eq("conversation_id", id).order("created_at", { ascending: true }),

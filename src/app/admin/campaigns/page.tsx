@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 export default async function CampaignsPage() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data: campaigns } = await supabase
     .from("campaigns")
     .select("*")

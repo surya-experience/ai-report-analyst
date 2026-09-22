@@ -70,13 +70,19 @@ export function SupportChat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [convo.id]);
 
+  // Staff actions go through /api/admin/support/*, which has no auth check
+  // (the admin console has no login by design — see README.md). Member
+  // actions go through /api/support/*, which still requires the member's
+  // own session.
+  const base = isStaff ? `/api/admin/support/${convo.id}` : `/api/support/${convo.id}`;
+
   async function send(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
     if (!text || sending) return;
     setSending(true);
     setInput("");
-    const res = await fetch(`/api/support/${convo.id}/message`, {
+    const res = await fetch(`${base}/message`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: text }),
@@ -89,7 +95,7 @@ export function SupportChat({
   }
 
   async function requestHuman() {
-    const res = await fetch(`/api/support/${convo.id}`, {
+    const res = await fetch(base, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "request_human" }),
@@ -97,8 +103,8 @@ export function SupportChat({
     if (res.ok) toast.success("A human agent has been notified.");
   }
 
-  async function staffAction(action: "assign_to_me" | "resolve" | "reopen") {
-    const res = await fetch(`/api/support/${convo.id}`, {
+  async function staffAction(action: "take" | "resolve" | "reopen") {
+    const res = await fetch(base, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action }),
@@ -127,9 +133,9 @@ export function SupportChat({
               <UserRound className="h-3.5 w-3.5 mr-1" /> Talk to a human
             </Button>
           )}
-          {isStaff && !convo.assigned_to && (
-            <Button size="sm" variant="outline" onClick={() => staffAction("assign_to_me")}>
-              Assign to me
+          {isStaff && (convo.channel !== "human" || convo.status === "pending") && (
+            <Button size="sm" variant="outline" onClick={() => staffAction("take")}>
+              Take conversation
             </Button>
           )}
           {isStaff && convo.status !== "resolved" && (

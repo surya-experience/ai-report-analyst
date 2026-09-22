@@ -2,6 +2,16 @@
 
 Production Next.js app: claim, complete, and grow a professional profile. Next.js 16 (App Router, TypeScript) + Tailwind + shadcn/ui, backed by Supabase (Postgres, Auth, Row-Level Security, Realtime) and the Anthropic API for the AI Coach, campaign copy, and Report Analyst.
 
+## ⚠️ Admin console has no login
+
+By explicit decision, `/admin` and everything under it (profiles table, campaigns, support inbox, reports) has **no sign-in and no role check** — anyone who can reach the deployed URL can view and act on all profile data, campaigns, and support conversations. Every admin page and API route reads/writes through the Supabase **service-role** client (`src/lib/supabase/admin.ts`), which bypasses Row-Level Security entirely, since there's no user session for RLS to authorize against.
+
+This is fine for a local demo behind a private URL. It is **not safe to deploy publicly** with real user data behind it. To re-enable auth on the admin console:
+1. In `src/app/admin/layout.tsx`, restore the `getSessionUser()` check and redirect (see git history for the original version).
+2. In each admin page (`src/app/admin/**/page.tsx`) and admin-only API route (`src/app/api/campaigns/**`, `src/app/api/reports/analyst`, `src/app/api/admin/support/**`), swap `createAdminClient()` back to the request-scoped `createClient()` from `src/lib/supabase/server.ts` and add back a `requireStaff()`-style check — RLS policies for staff access already exist in the migration and don't need to change.
+
+The member-facing side (profile claiming, the AI Coach, member support tickets, Pro checkout) still requires sign-in and is unaffected by this.
+
 ## Stack
 
 - **Frontend**: Next.js (App Router), TypeScript, Tailwind CSS, shadcn/ui, Recharts
@@ -29,7 +39,7 @@ Production Next.js app: claim, complete, and grow a professional profile. Next.j
    psql "$(npx supabase status -o json | jq -r .DB_URL)" -f supabase/seed.sql
    ```
    or paste `supabase/seed.sql` into the Supabase SQL editor for your project.
-5. **Promote yourself to admin** so you can see `/admin`: sign in once through the app, then in the Supabase SQL editor:
+5. (Only needed if you re-enable admin auth — see above) **Promote yourself to admin**: sign in once through the app, then in the Supabase SQL editor:
    ```sql
    update public.user_roles set role = 'admin' where user_id = (select id from auth.users where email = 'you@example.com');
    ```

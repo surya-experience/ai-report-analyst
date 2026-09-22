@@ -28,22 +28,3 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   };
 }
 
-export async function requireUser(): Promise<SessionUser> {
-  const user = await getSessionUser();
-  if (!user) throw new Error("UNAUTHENTICATED");
-  return user;
-}
-
-export async function requireStaff(): Promise<SessionUser> {
-  const user = await requireUser();
-  if (user.role !== "admin" && user.role !== "support") {
-    throw new Error("FORBIDDEN");
-  }
-  return user;
-}
-
-export async function requireAdmin(): Promise<SessionUser> {
-  const user = await requireUser();
-  if (user.role !== "admin") throw new Error("FORBIDDEN");
-  return user;
-}

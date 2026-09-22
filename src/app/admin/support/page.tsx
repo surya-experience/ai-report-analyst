@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminSupportInboxPage() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data: conversations } = await supabase
     .from("support_conversations")
     .select("*")
@@ -49,7 +49,7 @@ export default async function AdminSupportInboxPage() {
 function ConversationRow({
   c,
 }: {
-  c: { id: string; subject: string; status: string; channel: string; assigned_to: string | null; updated_at: string };
+  c: { id: string; subject: string; status: string; channel: string; updated_at: string };
 }) {
   return (
     <Link href={`/admin/support/${c.id}`}>
@@ -60,7 +60,7 @@ function ConversationRow({
             <p className="text-xs text-muted-foreground">{new Date(c.updated_at).toLocaleString()}</p>
           </div>
           <div className="flex items-center gap-1.5">
-            {c.channel === "human" && !c.assigned_to && c.status !== "resolved" && (
+            {c.status === "pending" && (
               <Badge className="bg-rose-100 text-rose-700">Needs agent</Badge>
             )}
             <Badge variant="outline">{c.channel === "ai" ? "AI" : "Human"}</Badge>

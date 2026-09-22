@@ -1,18 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { requireStaff } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveSegmentProfiles, type SegmentKey } from "@/lib/campaigns/segments";
 import { sendEmail } from "@/lib/email/send";
 
+// SECURITY: no auth check — see README.md "Admin console has no login".
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    await requireStaff();
-  } catch {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const { data: campaign } = await supabase.from("campaigns").select("*").eq("id", id).single();
   if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
