@@ -7,7 +7,9 @@ export const dynamic = "force-dynamic";
 export default async function ReportsPage() {
   const supabase = createAdminClient();
   const [{ data: exports }, { data: accounts }, { data: campaigns }] = await Promise.all([
-    supabase.from("report_exports").select("*").order("created_at", { ascending: false }).limit(20),
+    // Excludes exports made from a view-as session (profile_id set) —
+    // those belong to that member's own Recent exports, not the admin's.
+    supabase.from("report_exports").select("*").is("profile_id", null).order("created_at", { ascending: false }).limit(20),
     supabase.from("accounts").select("id, account_name, organization_name").order("account_name", { ascending: true }),
     supabase.from("campaigns").select("id, name").order("created_at", { ascending: false }),
   ]);
