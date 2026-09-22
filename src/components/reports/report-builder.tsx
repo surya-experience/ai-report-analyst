@@ -21,9 +21,9 @@ interface ReportOption {
   description: string;
 }
 
-// Kept in sync with CAMPAIGN_REPORT_KEYS in lib/reports/chart-preview.ts —
+// Kept in sync with ITEM_MODE_REPORT_KEYS in lib/reports/chart-preview.ts —
 // that module is server-only, so this client component can't import it.
-const CAMPAIGN_REPORT_KEYS = new Set(["campaign_delivery", "campaign_statistics"]);
+const ITEM_MODE_REPORT_KEYS = new Set(["campaign_delivery", "campaign_statistics", "profile_statistics"]);
 
 interface ExportRow {
   id: string;
@@ -166,7 +166,7 @@ export function ReportBuilder({
           onOpenChange={setPreviewOpen}
           reportKey={reportKey}
           reportLabel={selected?.label ?? ""}
-          isCampaignReport={CAMPAIGN_REPORT_KEYS.has(reportKey)}
+          isItemModeReport={ITEM_MODE_REPORT_KEYS.has(reportKey)}
           from={range.from}
           to={range.to}
         />

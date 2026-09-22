@@ -8,33 +8,41 @@ export interface ChartCategory {
   value: number;
 }
 
-export interface CampaignPreviewItem {
+export interface SeriesLineDef {
+  key: string;
+  label: string;
+  color: string;
+}
+
+// Generic "page through one item at a time" shape, shared by campaign
+// reports (one item per campaign) and the profile statistics report (one
+// item per profile) — each item gets its own stat tiles, a category
+// breakdown, and a day-by-day trend with report-specific series lines.
+export interface PreviewItem {
   id: string;
   name: string;
-  createdAt: string;
+  subtitle: string;
   stats: { label: string; value: string }[];
   breakdown: ChartCategory[];
-  series: { date: string; sent: number; opened: number }[];
+  series: Record<string, number | string>[];
+  seriesKeys: SeriesLineDef[];
 }
 
 export type ChartPreview =
   | { mode: "aggregate"; title: string; categories: ChartCategory[] }
-  | { mode: "items"; title: string; items: CampaignPreviewItem[] };
+  | { mode: "items"; title: string; items: PreviewItem[] };
 
-const CAMPAIGN_REPORT_KEYS = new Set(["campaign_delivery", "campaign_statistics"]);
+const ITEM_MODE_REPORT_KEYS = new Set(["campaign_delivery", "campaign_statistics", "profile_statistics"]);
 
-export function isCampaignReport(reportKey: string): boolean {
-  return CAMPAIGN_REPORT_KEYS.has(reportKey);
+export function isItemModeReport(reportKey: string): boolean {
+  return ITEM_MODE_REPORT_KEYS.has(reportKey);
 }
 
 function dayKey(iso: string) {
   return iso.slice(0, 10);
 }
 
-async function buildCampaignItems(
-  supabase: SupabaseClient<Database>,
-  range: DateRange
-): Promise<CampaignPreviewItem[]> {
+async function buildCampaignItems(supabase: SupabaseClient<Database>, range: DateRange): Promise<PreviewItem[]> {
   const { data: campaigns } = await supabase
     .from("campaigns")
     .select("*")
@@ -43,7 +51,7 @@ async function buildCampaignItems(
     .order("created_at", { ascending: false })
     .limit(25);
 
-  const items: CampaignPreviewItem[] = [];
+  const items: PreviewItem[] = [];
   for (const c of campaigns ?? []) {
     const { data: sends } = await supabase
       .from("campaign_sends")
@@ -82,7 +90,7 @@ async function buildCampaignItems(
     items.push({
       id: c.id,
       name: c.name,
-      createdAt: c.created_at,
+      subtitle: `created ${new Date(c.created_at).toLocaleDateString()}`,
       stats: [
         { label: "Sent", value: String(sent) },
         { label: "Open rate", value: pct(opened, sent) },
@@ -94,6 +102,70 @@ async function buildCampaignItems(
         { label: "Clicked", value: clicked },
       ],
       series,
+      seriesKeys: [
+        { key: "sent", label: "Sent (cumulative)", color: "#4C5FDB" },
+        { key: "opened", label: "Opened (cumulative)", color: "#16A34A" },
+      ],
+    });
+  }
+  return items;
+}
+
+async function buildProfileStatItems(supabase: SupabaseClient<Database>, range: DateRange): Promise<PreviewItem[]> {
+  const { data: rows } = await supabase
+    .from("profile_daily_stats")
+    .select("*, profiles(name)")
+    .gte("stat_date", range.from)
+    .lte("stat_date", range.to)
+    .order("stat_date", { ascending: true })
+    .limit(5000);
+
+  const byProfile = new Map<string, { name: string; rows: NonNullable<typeof rows> }>();
+  for (const r of rows ?? []) {
+    const profile = r.profiles as unknown as { name: string } | null;
+    const key = r.profile_id;
+    if (!byProfile.has(key)) byProfile.set(key, { name: profile?.name ?? "—", rows: [] });
+    byProfile.get(key)!.rows.push(r);
+  }
+
+  const items: PreviewItem[] = [];
+  for (const [profileId, { name, rows: profileRows }] of byProfile) {
+    const latest = profileRows[profileRows.length - 1];
+    const latestScore =
+      latest.profile_completion_points +
+      latest.review_reply_points +
+      latest.connections_points +
+      latest.listings_points +
+      latest.web_analytics_points;
+
+    const series = profileRows.map((r) => ({
+      date: r.stat_date.slice(5),
+      score:
+        r.profile_completion_points + r.review_reply_points + r.connections_points + r.listings_points + r.web_analytics_points,
+      views: r.profile_views,
+    }));
+
+    items.push({
+      id: profileId,
+      name,
+      subtitle: `${profileRows.length} day${profileRows.length === 1 ? "" : "s"} tracked`,
+      stats: [
+        { label: "Search Rank Score", value: String(latestScore) },
+        { label: "Location Rank", value: latest.location_rank != null ? `#${latest.location_rank}` : "—" },
+        { label: "Top 5%", value: latest.top_5_percent ? "Yes" : "No" },
+      ],
+      breakdown: [
+        { label: "Profile completion", value: latest.profile_completion_points },
+        { label: "Review replies", value: latest.review_reply_points },
+        { label: "Connections", value: latest.connections_points },
+        { label: "Listings", value: latest.listings_points },
+        { label: "Web analytics", value: latest.web_analytics_points },
+      ],
+      series,
+      seriesKeys: [
+        { key: "score", label: "Search Rank Score", color: "#4C5FDB" },
+        { key: "views", label: "Profile views", color: "#F5821F" },
+      ],
     });
   }
   return items;
@@ -104,8 +176,12 @@ export async function buildChartPreview(
   reportKey: string,
   range: DateRange
 ): Promise<ChartPreview> {
-  if (isCampaignReport(reportKey)) {
+  if (reportKey === "campaign_delivery" || reportKey === "campaign_statistics") {
     return { mode: "items", title: "Campaign Delivery Report", items: await buildCampaignItems(supabase, range) };
+  }
+
+  if (reportKey === "profile_statistics") {
+    return { mode: "items", title: "Profile Statistics Report", items: await buildProfileStatItems(supabase, range) };
   }
 
   if (reportKey === "survey_results" || reportKey === "srs_overview") {

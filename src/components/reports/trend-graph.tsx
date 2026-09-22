@@ -1,10 +1,17 @@
 "use client";
 
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LabelList } from "recharts";
+import type { SeriesLineDef } from "@/lib/reports/chart-preview";
 
-export function CampaignGraph({ series }: { series: { date: string; sent: number; opened: number }[] }) {
+export function TrendGraph({
+  series,
+  seriesKeys,
+}: {
+  series: Record<string, number | string>[];
+  seriesKeys: SeriesLineDef[];
+}) {
   if (series.length === 0) {
-    return <p className="text-sm text-muted-foreground text-center py-10">No sends recorded in this date range.</p>;
+    return <p className="text-sm text-muted-foreground text-center py-10">No data recorded in this date range.</p>;
   }
   return (
     <div className="h-64 w-full">
@@ -15,12 +22,11 @@ export function CampaignGraph({ series }: { series: { date: string; sent: number
           <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} allowDecimals={false} />
           <Tooltip />
           <Legend wrapperStyle={{ fontSize: 12 }} />
-          <Line type="monotone" dataKey="sent" name="Sent (cumulative)" stroke="#4C5FDB" strokeWidth={2}>
-            <LabelList dataKey="sent" position="top" style={{ fontSize: 11, fill: "#4C5FDB" }} />
-          </Line>
-          <Line type="monotone" dataKey="opened" name="Opened (cumulative)" stroke="#16A34A" strokeWidth={2}>
-            <LabelList dataKey="opened" position="bottom" style={{ fontSize: 11, fill: "#16A34A" }} />
-          </Line>
+          {seriesKeys.map((s) => (
+            <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={s.color} strokeWidth={2}>
+              <LabelList dataKey={s.key} position="top" style={{ fontSize: 11, fill: s.color }} />
+            </Line>
+          ))}
         </LineChart>
       </ResponsiveContainer>
     </div>

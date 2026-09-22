@@ -240,12 +240,65 @@ const srsOverview: ReportDefinition = {
   },
 };
 
+const profileStatistics: ReportDefinition = {
+  key: "profile_statistics",
+  label: "Profile Statistics Report",
+  description: "Day-by-day ranking and visibility trend, one row per profile per day.",
+  async fetch(supabase, range) {
+    const { data } = await supabase
+      .from("profile_daily_stats")
+      .select("*, profiles(name)")
+      .gte("stat_date", range.from)
+      .lte("stat_date", range.to)
+      .order("stat_date", { ascending: false })
+      .limit(2000);
+    const rows = (data ?? []).map((r) => {
+      const profile = r.profiles as unknown as { name: string } | null;
+      const searchRankScore =
+        r.profile_completion_points + r.review_reply_points + r.connections_points + r.listings_points + r.web_analytics_points;
+      return {
+        profile: profile?.name ?? "—",
+        date: r.stat_date,
+        location_rank: r.location_rank ?? "",
+        profile_views: r.profile_views,
+        search_rank_score: searchRankScore,
+        profile_completion_points: r.profile_completion_points,
+        review_reply_points: r.review_reply_points,
+        connections_points: r.connections_points,
+        listings_points: r.listings_points,
+        web_analytics_points: r.web_analytics_points,
+        total_experience_score: r.total_experience_score ?? "",
+        top_5_percent: r.top_5_percent ? "Yes" : "No",
+      };
+    });
+    return {
+      columns: [
+        { key: "profile", label: "Profile" },
+        { key: "date", label: "Date" },
+        { key: "location_rank", label: "Location Rank" },
+        { key: "profile_views", label: "Profile Views" },
+        { key: "search_rank_score", label: "Search Rank Score" },
+        { key: "profile_completion_points", label: "Profile Completion Points" },
+        { key: "review_reply_points", label: "Review Reply Points" },
+        { key: "connections_points", label: "Connections Points" },
+        { key: "listings_points", label: "Listings Points" },
+        { key: "web_analytics_points", label: "Web Analytics Points" },
+        { key: "total_experience_score", label: "Total Experience Score" },
+        { key: "top_5_percent", label: "Top 5%" },
+      ],
+      rows,
+      summaryLabel: `Profile Statistics · ${range.from} to ${range.to} · ${rows.length} daily rows included.`,
+    };
+  },
+};
+
 export const REPORT_DEFINITIONS: ReportDefinition[] = [
   accountStatistics,
   campaignDeliveryStatus,
   campaignStatistics,
   surveyResults,
   srsOverview,
+  profileStatistics,
 ];
 
 export function getReportDefinition(key: string): ReportDefinition | undefined {

@@ -13,7 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { CategoryBars, CategoryPie } from "@/components/reports/category-chart";
-import { CampaignGraph } from "@/components/reports/campaign-graph";
+import { TrendGraph } from "@/components/reports/trend-graph";
 import type { ChartPreview } from "@/lib/reports/chart-preview";
 
 type ChartType = "bar" | "donut" | "pie" | "graph";
@@ -23,7 +23,7 @@ export function PreviewDialog({
   onOpenChange,
   reportKey,
   reportLabel,
-  isCampaignReport,
+  isItemModeReport,
   from,
   to,
 }: {
@@ -31,13 +31,13 @@ export function PreviewDialog({
   onOpenChange: (open: boolean) => void;
   reportKey: string;
   reportLabel: string;
-  isCampaignReport: boolean;
+  isItemModeReport: boolean;
   from: string;
   to: string;
 }) {
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<ChartPreview | null>(null);
-  const [chartType, setChartType] = useState<ChartType>(isCampaignReport ? "graph" : "bar");
+  const [chartType, setChartType] = useState<ChartType>(isItemModeReport ? "graph" : "bar");
   const [index, setIndex] = useState(0);
 
   // Fetches whenever the dialog transitions to open — driven off the `open`
@@ -63,7 +63,7 @@ export function PreviewDialog({
       .then((data) => {
         if (cancelled) return;
         setPreview(data.preview ?? null);
-        setChartType(isCampaignReport ? "graph" : "bar");
+        setChartType(isItemModeReport ? "graph" : "bar");
         setIndex(0);
       })
       .finally(() => {
@@ -127,8 +127,8 @@ export function PreviewDialog({
               <div className="text-center">
                 <p className="font-bold">{item.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  Campaign {index + 1} of {preview.items.length} · created{" "}
-                  {new Date(item.createdAt).toLocaleDateString()}
+                  {reportKey === "profile_statistics" ? "Profile" : "Campaign"} {index + 1} of {preview.items.length} ·{" "}
+                  {item.subtitle}
                 </p>
               </div>
               <Button
@@ -155,14 +155,16 @@ export function PreviewDialog({
             {chartType === "bar" && <CategoryBars categories={item.breakdown} />}
             {chartType === "donut" && <CategoryPie categories={item.breakdown} donut />}
             {chartType === "pie" && <CategoryPie categories={item.breakdown} donut={false} />}
-            {chartType === "graph" && <CampaignGraph series={item.series} />}
+            {chartType === "graph" && <TrendGraph series={item.series} seriesKeys={item.seriesKeys} />}
 
             <ChartTypeToggle options={options} value={chartType} onChange={setChartType} />
           </div>
         )}
 
         {!loading && preview?.mode === "items" && preview.items.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-10">No campaigns in this date range.</p>
+          <p className="text-sm text-muted-foreground text-center py-10">
+            No {reportKey === "profile_statistics" ? "profile stats" : "campaigns"} in this date range.
+          </p>
         )}
 
         <DialogFooter>

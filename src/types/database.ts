@@ -168,6 +168,22 @@ export interface SurveyResponse {
   created_at: string;
 }
 
+export interface ProfileDailyStat {
+  id: string;
+  profile_id: string;
+  stat_date: string;
+  location_rank: number | null;
+  profile_views: number;
+  profile_completion_points: number;
+  review_reply_points: number;
+  connections_points: number;
+  listings_points: number;
+  web_analytics_points: number;
+  total_experience_score: number | null;
+  top_5_percent: boolean;
+  created_at: string;
+}
+
 export interface ReportExport {
   id: string;
   report_key: string;
@@ -216,6 +232,7 @@ export interface Database {
       surveys: Table<Survey>;
       survey_responses: Table<SurveyResponse>;
       report_exports: Table<ReportExport>;
+      profile_daily_stats: Table<ProfileDailyStat>;
     };
     Views: Record<string, never>;
     Functions: {

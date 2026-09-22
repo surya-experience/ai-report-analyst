@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getReportDefinition } from "@/lib/reports/definitions";
+import { REPORT_KNOWLEDGE } from "@/lib/reports/knowledge";
 import { getAnthropic, CLAUDE_MODEL } from "@/lib/ai/anthropic";
 import type Anthropic from "@anthropic-ai/sdk";
 
@@ -27,15 +28,21 @@ export async function POST(req: NextRequest) {
   // questions, not a verbatim copy of the export.
   const sample = result.rows.slice(0, 300);
 
+  const knowledge = REPORT_KNOWLEDGE[reportKey];
+
   const anthropic = getAnthropic();
   const response = await anthropic.messages.create({
     model: CLAUDE_MODEL,
-    max_tokens: 500,
+    max_tokens: 600,
     system: `You are the Report Analyst for the Experience.com admin console, currently scoped to one report: "${definition.label}" (${definition.description}).
 
-Answer the admin's question using ONLY the report data below — never invent numbers, rows, or trends that aren't there. If the question needs data outside this report, say so and name which report would have it. Be concise (2-5 sentences), and cite specific numbers when relevant.
+You have two kinds of grounding — use both, and keep them clearly separate:
+1. Reference documentation on how this report type works, its columns, and common "why is X missing" reasons — use this for how/why questions and terminology.
+2. The report's own live rows for this account, right now — use this for what/how-many questions, and never invent a number that isn't in it.
 
-${result.summaryLabel}
+If the documentation describes a field or scoping rule (e.g. organizations, tiers, agent roles) that isn't present in this deployment's actual data below, say so plainly rather than pretending it applies here. Be concise (2-5 sentences), and cite specific numbers from the live data when relevant.
+${knowledge ? `\n---\nReference documentation:\n${knowledge}\n---\n` : ""}
+Live data — ${result.summaryLabel}
 ${sample.length < result.rows.length ? `(Showing the first ${sample.length} of ${result.rows.length} rows.)\n` : ""}
 Columns: ${result.columns.map((c) => c.label).join(", ")}
 
