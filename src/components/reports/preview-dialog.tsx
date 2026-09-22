@@ -26,6 +26,7 @@ import { TrendGraph } from "@/components/reports/trend-graph";
 import type { ChartCategory, ChartPreview } from "@/lib/reports/chart-preview";
 import { downloadChartsAsPng, type ChartRegion } from "@/lib/reports/chart-image";
 import type { ExportFormat } from "@/lib/reports/export";
+import { buildExportFilename, isDateFilteredReportKey } from "@/lib/reports/filename";
 
 type ChartType = "table" | "bar" | "donut" | "pie" | "graph";
 
@@ -39,7 +40,7 @@ interface TableData {
   totalRows: number;
 }
 
-const NAV_BUTTON_CLASS = "rounded-full border-border shadow-sm size-10";
+const NAV_BUTTON_CLASS = "rounded-full border-border shadow-sm size-8";
 
 export function PreviewDialog({
   open,
@@ -49,6 +50,8 @@ export function PreviewDialog({
   from,
   to,
   accountId,
+  campaignId,
+  accountLabel,
   format,
   onExported,
 }: {
@@ -59,6 +62,8 @@ export function PreviewDialog({
   from: string;
   to: string;
   accountId?: string;
+  campaignId?: string;
+  accountLabel?: string;
   format: ExportFormat;
   onExported?: (exportRow: unknown) => void;
 }) {
@@ -89,12 +94,12 @@ export function PreviewDialog({
       fetch("/api/reports/chart-preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reportKey, from, to, accountId }),
+        body: JSON.stringify({ reportKey, from, to, accountId, campaignId }),
       }).then((r) => r.json()),
       fetch("/api/reports/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reportKey, from, to, accountId }),
+        body: JSON.stringify({ reportKey, from, to, accountId, campaignId }),
       }).then((r) => r.json()),
     ])
       .then(([chartData, previewData]) => {
@@ -112,7 +117,7 @@ export function PreviewDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, reportKey, from, to, accountId]);
+  }, [open, reportKey, from, to, accountId, campaignId]);
 
   const options: { value: ChartType; label: string }[] = [
     { value: "table", label: "Table" },
@@ -158,7 +163,7 @@ export function PreviewDialog({
         const res = await fetch("/api/reports/export", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reportKey, format, from, to, accountId }),
+          body: JSON.stringify({ reportKey, format, from, to, accountId, campaignId, accountLabel }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -177,8 +182,21 @@ export function PreviewDialog({
     const cells = chartCells();
     if (cells.length === 0) return;
     const subtitle = item?.name ?? account?.name;
-    const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-    const filename = `${slug(reportKey)}${subtitle ? `-${slug(subtitle)}` : ""}.png`;
+    const dateFiltered = isDateFilteredReportKey(reportKey);
+    // The "account" slot in the filename only applies to account-scoped
+    // reports — for a paged breakdown it's whichever account is on screen,
+    // falling back to the explicit filter (e.g. a single selected account),
+    // and to "All Accounts" for report types with no account concept at all
+    // (campaign/profile items shouldn't have their item name mislabeled as
+    // an account there).
+    const filenameAccountLabel = preview?.mode === "breakdowns" ? (account?.name ?? accountLabel) : accountLabel;
+    const filename = buildExportFilename({
+      reportLabel,
+      accountLabel: filenameAccountLabel,
+      rangeStart: dateFiltered ? from : null,
+      rangeEnd: dateFiltered ? to : null,
+      extension: "png",
+    });
     downloadChartsAsPng(filename, subtitle ? `${reportLabel} — ${subtitle}` : reportLabel, cells);
   }
 

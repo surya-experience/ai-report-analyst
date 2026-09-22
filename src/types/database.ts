@@ -155,6 +155,7 @@ export interface Subscription {
 export interface Survey {
   id: string;
   name: string;
+  campaign_id: string | null;
   created_at: string;
 }
 
@@ -231,6 +232,7 @@ export interface ReportExport {
   storage_path: string;
   requested_by: string | null;
   requested_by_label: string;
+  account_label: string | null;
   created_at: string;
 }
 

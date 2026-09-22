@@ -30,12 +30,14 @@ export function ReportAnalyst({
   from,
   to,
   accountId,
+  campaignId,
 }: {
   reportKey: string;
   reportLabel: string;
   from: string;
   to: string;
   accountId?: string;
+  campaignId?: string;
 }) {
   const [question, setQuestion] = useState("");
   const [turns, setTurns] = useState<Turn[]>([{ role: "assistant", text: openingMessage(reportLabel) }]);
@@ -50,7 +52,7 @@ export function ReportAnalyst({
     const res = await fetch("/api/reports/analyst", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: text, reportKey, from, to, accountId }),
+      body: JSON.stringify({ question: text, reportKey, from, to, accountId, campaignId }),
     });
     const data = await res.json();
     setLoading(false);

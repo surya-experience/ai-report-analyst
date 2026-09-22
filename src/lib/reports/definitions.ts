@@ -21,6 +21,9 @@ export interface DateRange {
 export interface ReportParams {
   // Account Statistics only: filter to one account, or omit/"" for all.
   accountId?: string;
+  // Campaign Delivery Status + Survey Results only: filter to one
+  // campaign, or omit/"" for all.
+  campaignId?: string;
 }
 
 // `range.to` is a bare date. Compared as-is against a timestamptz column,
@@ -142,14 +145,16 @@ const campaignDeliveryStatus: ReportDefinition = {
   key: "campaign_delivery",
   label: "Campaign Delivery Status Report",
   description: "Every individual send, with its delivery status, for campaigns in range.",
-  async fetch(supabase, range) {
-    const { data } = await supabase
+  async fetch(supabase, range, params) {
+    let query = supabase
       .from("campaign_sends")
       .select("*, campaigns(name, segment), profiles(name, email)")
       .gte("created_at", range.from)
       .lte("created_at", endOfDay(range.to))
       .order("created_at", { ascending: false })
       .limit(2000);
+    if (params?.campaignId) query = query.eq("campaign_id", params.campaignId);
+    const { data } = await query;
     const rows = (data ?? []).map((s) => {
       const campaign = s.campaigns as unknown as { name: string; segment: string } | null;
       const profile = s.profiles as unknown as { name: string; email: string | null } | null;
@@ -231,14 +236,20 @@ const surveyResults: ReportDefinition = {
   key: "survey_results",
   label: "Survey Results Report",
   description: "Individual survey responses with rating and comments.",
-  async fetch(supabase, range) {
-    const { data } = await supabase
+  async fetch(supabase, range, params) {
+    // `surveys!inner` (rather than the default left join) so filtering on
+    // the embedded `campaign_id` actually restricts which survey_responses
+    // rows come back — survey_id is not-null, so every response has a
+    // survey and the inner join never drops rows when no filter is set.
+    let query = supabase
       .from("survey_responses")
-      .select("*, surveys(name)")
+      .select("*, surveys!inner(name, campaign_id)")
       .gte("created_at", range.from)
       .lte("created_at", endOfDay(range.to))
       .order("created_at", { ascending: false })
       .limit(2000);
+    if (params?.campaignId) query = query.eq("surveys.campaign_id", params.campaignId);
+    const { data } = await query;
     const rows = (data ?? []).map((r) => {
       const survey = r.surveys as unknown as { name: string } | null;
       return {

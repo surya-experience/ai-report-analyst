@@ -59,14 +59,20 @@ function dayKey(iso: string) {
   return iso.slice(0, 10);
 }
 
-async function buildCampaignItems(supabase: SupabaseClient<Database>, range: DateRange): Promise<PreviewItem[]> {
-  const { data: campaigns } = await supabase
+async function buildCampaignItems(
+  supabase: SupabaseClient<Database>,
+  range: DateRange,
+  campaignId?: string
+): Promise<PreviewItem[]> {
+  let campaignQuery = supabase
     .from("campaigns")
     .select("*")
     .gte("created_at", range.from)
     .lte("created_at", endOfDay(range.to))
     .order("created_at", { ascending: false })
     .limit(25);
+  if (campaignId) campaignQuery = campaignQuery.eq("id", campaignId);
+  const { data: campaigns } = await campaignQuery;
 
   const items: PreviewItem[] = [];
   for (const c of campaigns ?? []) {
@@ -282,7 +288,11 @@ export async function buildChartPreview(
   params?: ReportParams
 ): Promise<ChartPreview> {
   if (reportKey === "campaign_delivery" || reportKey === "campaign_statistics") {
-    return { mode: "items", title: "Campaign Delivery Report", items: await buildCampaignItems(supabase, range) };
+    return {
+      mode: "items",
+      title: "Campaign Delivery Report",
+      items: await buildCampaignItems(supabase, range, params?.campaignId),
+    };
   }
 
   if (reportKey === "profile_statistics") {
@@ -290,11 +300,13 @@ export async function buildChartPreview(
   }
 
   if (reportKey === "survey_results" || reportKey === "srs_overview") {
-    const { data } = await supabase
+    let responseQuery = supabase
       .from("survey_responses")
-      .select("rating")
+      .select("rating, surveys!inner(campaign_id)")
       .gte("created_at", range.from)
       .lte("created_at", endOfDay(range.to));
+    if (params?.campaignId) responseQuery = responseQuery.eq("surveys.campaign_id", params.campaignId);
+    const { data } = await responseQuery;
     const rows = data ?? [];
     const categories = [1, 2, 3, 4, 5].map((star) => ({
       label: `${star}★`,

@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Loader2, Download, Eye } from "lucide-react";
 import { ReportAnalyst } from "@/components/reports/report-analyst";
@@ -27,7 +28,19 @@ interface AccountOption {
   organization_name: string;
 }
 
+interface CampaignOption {
+  id: string;
+  name: string;
+}
+
 const ACCOUNT_FILTER_REPORT_KEYS = new Set(["account_statistics"]);
+// Kept in sync with isDateFilteredReport() in lib/reports/definitions.ts —
+// that module is server-only, so this client component can't import it.
+// Unlike that function (every report except account_statistics), the date
+// range is only user-adjustable for these three; the rest keep the fixed
+// last-90-days default.
+const DATE_FILTER_REPORT_KEYS = new Set(["campaign_delivery", "campaign_statistics", "survey_results"]);
+const CAMPAIGN_FILTER_REPORT_KEYS = new Set(["campaign_delivery", "survey_results"]);
 
 interface ExportRow {
   id: string;
@@ -55,29 +68,45 @@ export function ReportBuilder({
   reportOptions,
   initialExports,
   accounts,
+  campaigns,
 }: {
   reportOptions: ReportOption[];
   initialExports: ExportRow[];
   accounts: AccountOption[];
+  campaigns: CampaignOption[];
 }) {
   const [reportKey, setReportKey] = useState(reportOptions[0]?.key ?? "");
   const [accountId, setAccountId] = useState<string>("all");
+  const [campaignId, setCampaignId] = useState<string>("all");
+  const [customFrom, setCustomFrom] = useState(isoDate(ninetyDaysAgo));
+  const [customTo, setCustomTo] = useState(isoDate(today));
   const [format, setFormat] = useState("xlsx");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exports, setExports] = useState(initialExports);
 
-  const range = { from: isoDate(ninetyDaysAgo), to: isoDate(today) };
+  const range = { from: customFrom, to: customTo };
   const selected = reportOptions.find((r) => r.key === reportKey);
   const showAccountFilter = ACCOUNT_FILTER_REPORT_KEYS.has(reportKey);
+  const showDateFilter = DATE_FILTER_REPORT_KEYS.has(reportKey);
+  const showCampaignFilter = CAMPAIGN_FILTER_REPORT_KEYS.has(reportKey);
   const effectiveAccountId = showAccountFilter && accountId !== "all" ? accountId : undefined;
+  const effectiveCampaignId = showCampaignFilter && campaignId !== "all" ? campaignId : undefined;
+  const accountLabel = effectiveAccountId ? accounts.find((a) => a.id === effectiveAccountId)?.account_name : undefined;
 
   async function exportReport() {
     setExporting(true);
     const res = await fetch("/api/reports/export", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reportKey, format, ...range, accountId: effectiveAccountId }),
+      body: JSON.stringify({
+        reportKey,
+        format,
+        ...range,
+        accountId: effectiveAccountId,
+        campaignId: effectiveCampaignId,
+        accountLabel,
+      }),
     });
     const data = await res.json();
     setExporting(false);
@@ -145,6 +174,49 @@ export function ReportBuilder({
                   </Select>
                 </div>
               )}
+
+              {showDateFilter && (
+                <>
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground mb-1.5">From</p>
+                    <Input
+                      type="date"
+                      value={customFrom}
+                      max={customTo}
+                      onChange={(e) => setCustomFrom(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground mb-1.5">To</p>
+                    <Input
+                      type="date"
+                      value={customTo}
+                      min={customFrom}
+                      max={isoDate(today)}
+                      onChange={(e) => setCustomTo(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+
+              {showCampaignFilter && (
+                <div className="sm:col-span-2">
+                  <p className="text-xs font-semibold text-muted-foreground mb-1.5">Campaign</p>
+                  <Select value={campaignId} onValueChange={setCampaignId}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All campaigns</SelectItem>
+                      {campaigns.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2">
@@ -168,17 +240,20 @@ export function ReportBuilder({
           from={range.from}
           to={range.to}
           accountId={effectiveAccountId}
+          campaignId={effectiveCampaignId}
+          accountLabel={accountLabel}
           format={format as "xlsx" | "csv"}
           onExported={(row) => setExports((prev) => [row as ExportRow, ...prev])}
         />
 
         <ReportAnalyst
-          key={`${reportKey}:${effectiveAccountId ?? "all"}`}
+          key={`${reportKey}:${effectiveAccountId ?? "all"}:${effectiveCampaignId ?? "all"}:${range.from}:${range.to}`}
           reportKey={reportKey}
           reportLabel={selected?.label ?? ""}
           from={range.from}
           to={range.to}
           accountId={effectiveAccountId}
+          campaignId={effectiveCampaignId}
         />
       </div>
 
