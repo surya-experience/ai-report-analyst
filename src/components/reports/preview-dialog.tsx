@@ -117,11 +117,12 @@ export function PreviewDialog({
 
   const item = preview?.mode === "items" ? preview.items[index] : null;
   const account = preview?.mode === "breakdowns" ? preview.accounts[index] : null;
-  const wide = preview?.mode === "breakdowns" || chartType === "table";
 
+  // A fixed width regardless of chart mode/table toggle — switching between
+  // them used to resize the dialog (narrow <-> wide), which felt jarring.
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={wide ? "sm:max-w-3xl" : "sm:max-w-xl"}>
+      <DialogContent className="sm:max-w-3xl min-w-0">
         <DialogHeader>
           <DialogTitle>Preview — {reportLabel}</DialogTitle>
         </DialogHeader>
@@ -133,11 +134,15 @@ export function PreviewDialog({
         )}
 
         {!loading && chartType === "table" && tableData && (
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0">
             <p className="text-xs text-muted-foreground">
               Showing {tableData.rows.length} of {tableData.totalRows} rows
             </p>
-            <div className="overflow-x-auto rounded-lg border max-h-[55vh] overflow-y-auto">
+            {/* min-w-0 is required here: DialogContent is a grid, and grid
+                items default to min-width:auto, which stops overflow-x-auto
+                from ever kicking in — the table just grows the dialog wider
+                instead of scrolling internally. */}
+            <div className="rounded-lg border max-h-[55vh] overflow-y-auto overflow-x-auto min-w-0">
               <Table>
                 <TableHeader>
                   <TableRow>

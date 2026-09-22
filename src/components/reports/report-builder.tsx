@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Select,
   SelectContent,
@@ -69,35 +69,11 @@ export function ReportBuilder({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exports, setExports] = useState(initialExports);
-  const [summaryLabel, setSummaryLabel] = useState<string | null>(null);
 
   const range = { from: isoDate(ninetyDaysAgo), to: isoDate(today) };
   const selected = reportOptions.find((r) => r.key === reportKey);
   const showAccountFilter = ACCOUNT_FILTER_REPORT_KEYS.has(reportKey);
   const effectiveAccountId = showAccountFilter && accountId !== "all" ? accountId : undefined;
-
-  // Refresh the "included" summary whenever the report or account filter
-  // changes. The reset happens inside the fetch callback (not synchronously
-  // in the effect body) so a fast switch can't have an in-flight older
-  // request clobber a newer one.
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/reports/preview", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reportKey, ...range, accountId: effectiveAccountId }),
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (cancelled) return;
-        setSummaryLabel(data.report?.summaryLabel ?? null);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportKey, effectiveAccountId]);
 
   async function exportReport() {
     setExporting(true);
@@ -184,10 +160,6 @@ export function ReportBuilder({
                 Preview
               </Button>
             </div>
-
-            {summaryLabel && (
-              <div className="rounded-lg bg-indigo-50 text-indigo-900 text-sm px-4 py-3">{summaryLabel}</div>
-            )}
           </CardContent>
         </Card>
 
