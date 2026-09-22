@@ -10,17 +10,10 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { toast } from "sonner";
 import { Loader2, Download, Eye } from "lucide-react";
 import { ReportAnalyst } from "@/components/reports/report-analyst";
+import { PreviewDialog } from "@/components/reports/preview-dialog";
 
 interface ReportOption {
   key: string;
@@ -28,16 +21,9 @@ interface ReportOption {
   description: string;
 }
 
-interface ReportColumn {
-  key: string;
-  label: string;
-}
-
-interface PreviewData {
-  columns: ReportColumn[];
-  rows: Record<string, string | number>[];
-  summaryLabel: string;
-}
+// Kept in sync with CAMPAIGN_REPORT_KEYS in lib/reports/chart-preview.ts —
+// that module is server-only, so this client component can't import it.
+const CAMPAIGN_REPORT_KEYS = new Set(["campaign_delivery", "campaign_statistics"]);
 
 interface ExportRow {
   id: string;
@@ -71,9 +57,7 @@ export function ReportBuilder({
 }) {
   const [reportKey, setReportKey] = useState(reportOptions[0]?.key ?? "");
   const [format, setFormat] = useState("xlsx");
-  const [preview, setPreview] = useState<PreviewData | null>(null);
-  const [totalRows, setTotalRows] = useState(0);
-  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exports, setExports] = useState(initialExports);
   const [summaryLabel, setSummaryLabel] = useState<string | null>(null);
@@ -81,29 +65,10 @@ export function ReportBuilder({
   const range = { from: isoDate(ninetyDaysAgo), to: isoDate(today) };
   const selected = reportOptions.find((r) => r.key === reportKey);
 
-  async function loadPreview() {
-    if (!reportKey) return;
-    setLoadingPreview(true);
-    const res = await fetch("/api/reports/preview", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reportKey, ...range }),
-    });
-    const data = await res.json();
-    setLoadingPreview(false);
-    if (!res.ok) {
-      toast.error(data.error ?? "Could not load preview");
-      return;
-    }
-    setPreview(data.report);
-    setTotalRows(data.totalRows);
-    setSummaryLabel(data.report.summaryLabel);
-  }
-
-  // Refresh the "included" summary whenever the report changes, without
-  // forcing a full table preview open. The resets happen inside the fetch
-  // callback (not synchronously in the effect body) so a fast report
-  // switch can't have an in-flight older request clobber a newer one.
+  // Refresh the "included" summary whenever the report changes. The reset
+  // happens inside the fetch callback (not synchronously in the effect
+  // body) so a fast report switch can't have an in-flight older request
+  // clobber a newer one.
   useEffect(() => {
     let cancelled = false;
     fetch("/api/reports/preview", {
@@ -114,7 +79,6 @@ export function ReportBuilder({
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
-        setPreview(null);
         setSummaryLabel(data.report?.summaryLabel ?? null);
       })
       .catch(() => {});
@@ -185,8 +149,8 @@ export function ReportBuilder({
                 {exporting ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Download className="h-4 w-4 mr-1.5" />}
                 {exporting ? "Exporting…" : "Export report"}
               </Button>
-              <Button variant="outline" onClick={loadPreview} disabled={loadingPreview}>
-                {loadingPreview ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Eye className="h-4 w-4 mr-1.5" />}
+              <Button variant="outline" onClick={() => setPreviewOpen(true)}>
+                <Eye className="h-4 w-4 mr-1.5" />
                 Preview
               </Button>
             </div>
@@ -197,45 +161,15 @@ export function ReportBuilder({
           </CardContent>
         </Card>
 
-        {preview && (
-          <Card>
-            <CardContent className="pt-2">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-semibold">Preview</p>
-                <p className="text-xs text-muted-foreground">
-                  Showing {preview.rows.length} of {totalRows} rows
-                </p>
-              </div>
-              <div className="overflow-x-auto rounded-lg border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {preview.columns.map((c) => (
-                        <TableHead key={c.key}>{c.label}</TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {preview.rows.map((row, i) => (
-                      <TableRow key={i}>
-                        {preview.columns.map((c) => (
-                          <TableCell key={c.key}>{row[c.key]}</TableCell>
-                        ))}
-                      </TableRow>
-                    ))}
-                    {preview.rows.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={preview.columns.length} className="text-center py-8 text-muted-foreground">
-                          No rows in this date range.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        <PreviewDialog
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          reportKey={reportKey}
+          reportLabel={selected?.label ?? ""}
+          isCampaignReport={CAMPAIGN_REPORT_KEYS.has(reportKey)}
+          from={range.from}
+          to={range.to}
+        />
 
         <ReportAnalyst
           key={reportKey}

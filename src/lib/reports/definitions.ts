@@ -15,8 +15,16 @@ export interface ReportResult {
 }
 
 export interface DateRange {
-  from: string; // ISO date
-  to: string; // ISO date
+  from: string; // ISO date, e.g. "2026-09-01"
+  to: string; // ISO date, e.g. "2026-09-22"
+}
+
+// `range.to` is a bare date. Compared as-is against a timestamptz column,
+// Postgres treats it as that day's midnight UTC, silently excluding
+// anything created later that same day — this pushes the bound to the end
+// of the day so "to" is actually inclusive of it.
+export function endOfDay(dateOnly: string): string {
+  return `${dateOnly}T23:59:59.999Z`;
 }
 
 export interface ReportDefinition {
@@ -39,7 +47,7 @@ const accountStatistics: ReportDefinition = {
       .from("profiles")
       .select("*")
       .gte("created_at", range.from)
-      .lte("created_at", range.to)
+      .lte("created_at", endOfDay(range.to))
       .order("created_at", { ascending: false });
     const rows = (data ?? []).map((p) => ({
       name: p.name,
@@ -77,7 +85,7 @@ const campaignDeliveryStatus: ReportDefinition = {
       .from("campaign_sends")
       .select("*, campaigns(name, segment), profiles(name, email)")
       .gte("created_at", range.from)
-      .lte("created_at", range.to)
+      .lte("created_at", endOfDay(range.to))
       .order("created_at", { ascending: false })
       .limit(2000);
     const rows = (data ?? []).map((s) => {
@@ -116,7 +124,7 @@ const campaignStatistics: ReportDefinition = {
       .from("campaigns")
       .select("*")
       .gte("created_at", range.from)
-      .lte("created_at", range.to)
+      .lte("created_at", endOfDay(range.to))
       .order("created_at", { ascending: false });
 
     const campaignIds = (campaigns ?? []).map((c) => c.id);
@@ -166,7 +174,7 @@ const surveyResults: ReportDefinition = {
       .from("survey_responses")
       .select("*, surveys(name)")
       .gte("created_at", range.from)
-      .lte("created_at", range.to)
+      .lte("created_at", endOfDay(range.to))
       .order("created_at", { ascending: false })
       .limit(2000);
     const rows = (data ?? []).map((r) => {
@@ -203,7 +211,7 @@ const srsOverview: ReportDefinition = {
       .from("survey_responses")
       .select("survey_id, rating, created_at")
       .gte("created_at", range.from)
-      .lte("created_at", range.to);
+      .lte("created_at", endOfDay(range.to));
 
     const rows = (surveys ?? []).map((s) => {
       const forSurvey = (responses ?? []).filter((r) => r.survey_id === s.id);
