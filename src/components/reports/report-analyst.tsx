@@ -139,9 +139,13 @@ export function ReportAnalyst({
   const suggestions = SUGGESTIONS_BY_REPORT[reportKey] ?? ["Summarize this report.", "What stands out most in this data?"];
 
   return (
-    <Card className="border-indigo-200">
-      <CardContent className="pt-2 space-y-4">
-        <div className="flex items-center justify-between gap-2.5">
+    // Bounded to a flex column at lg (matching the parent's lg:h-full
+    // column) so only the message list below scrolls internally — the
+    // header, suggestions, and input stay fixed in place instead of
+    // getting carried along by the whole card scrolling as one block.
+    <Card className="border-indigo-200 lg:flex lg:h-full lg:flex-col lg:min-h-0">
+      <CardContent className="pt-2 space-y-4 lg:flex lg:flex-1 lg:min-h-0 lg:flex-col">
+        <div className="flex items-center justify-between gap-2.5 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
               <MessageCircle className="h-4 w-4 text-indigo-600" />
@@ -164,7 +168,7 @@ export function ReportAnalyst({
           )}
         </div>
 
-        <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+        <div className="space-y-3 max-h-80 overflow-y-auto pr-1 lg:max-h-none lg:flex-1 lg:min-h-0">
           {turns.map((t, i) => {
             const { prose, chart } = t.role === "assistant" ? parseChartReply(t.text) : { prose: t.text, chart: null };
             return (
@@ -193,7 +197,7 @@ export function ReportAnalyst({
           )}
         </div>
 
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5 shrink-0">
           {suggestions.map((s) => (
             <button
               key={s}
@@ -211,7 +215,7 @@ export function ReportAnalyst({
             e.preventDefault();
             ask(question);
           }}
-          className="flex gap-2"
+          className="flex gap-2 shrink-0"
         >
           <Input
             value={question}

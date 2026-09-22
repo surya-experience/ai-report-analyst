@@ -135,14 +135,15 @@ export function ReportBuilder({
   return (
     // The parent page gives this a definite height (h-full, down from the
     // admin shell's fixed viewport height) instead of letting it grow to
-    // content — that's what makes `h-full` here mean something real, so
-    // each column can bound its OWN overflow (the left column scrolls in
-    // the rare case its form + analyst don't fit; Recent exports' list
-    // always does) instead of the page never fitting and forcing the
-    // whole admin shell to scroll.
+    // content — that's what makes `h-full` here mean something real. The
+    // left column no longer scrolls as a whole: the report-config card is
+    // fixed (shrink-0) and Report analyst fills the rest (flex-1 min-h-0),
+    // so it's the analyst's own message list that scrolls — as its chat
+    // grows, the config card above it stays put instead of getting
+    // scrolled out of view along with it.
     <div className="grid lg:grid-cols-[1fr_320px] gap-6 h-full">
-      <div className="space-y-6 lg:h-full lg:overflow-y-auto lg:pr-1">
-        <Card>
+      <div className="flex flex-col gap-6 lg:h-full lg:min-h-0">
+        <Card className="shrink-0">
           <CardContent className="pt-2 space-y-4">
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
@@ -267,17 +268,19 @@ export function ReportBuilder({
           onExported={(row) => setExports((prev) => [row as ExportRow, ...prev])}
         />
 
-        <ReportAnalyst
-          key={`${reportKey}:${effectiveAccountId ?? "all"}:${effectiveCampaignId ?? "all"}:${profileId ?? "all"}:${range.from}:${range.to}`}
-          reportKey={reportKey}
-          reportLabel={selected?.label ?? ""}
-          from={range.from}
-          to={range.to}
-          accountId={effectiveAccountId}
-          campaignId={effectiveCampaignId}
-          profileId={profileId}
-          accountLabel={accountLabel}
-        />
+        <div className="lg:flex-1 lg:min-h-0">
+          <ReportAnalyst
+            key={`${reportKey}:${effectiveAccountId ?? "all"}:${effectiveCampaignId ?? "all"}:${profileId ?? "all"}:${range.from}:${range.to}`}
+            reportKey={reportKey}
+            reportLabel={selected?.label ?? ""}
+            from={range.from}
+            to={range.to}
+            accountId={effectiveAccountId}
+            campaignId={effectiveCampaignId}
+            profileId={profileId}
+            accountLabel={accountLabel}
+          />
+        </div>
       </div>
 
       <Card className="lg:flex lg:flex-col lg:min-h-0">
