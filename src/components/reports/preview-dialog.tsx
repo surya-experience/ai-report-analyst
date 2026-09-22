@@ -19,12 +19,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { toast } from "sonner";
+import { Loader2, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { CategoryBars, CategoryPie } from "@/components/reports/category-chart";
 import { TrendGraph } from "@/components/reports/trend-graph";
-import type { ChartPreview } from "@/lib/reports/chart-preview";
+import type { ChartCategory, ChartPreview } from "@/lib/reports/chart-preview";
+import { downloadChartsAsPng, type ChartRegion } from "@/lib/reports/chart-image";
+import type { ExportFormat } from "@/lib/reports/export";
 
-type ChartType = "bar" | "donut" | "pie" | "graph" | "table";
+type ChartType = "table" | "bar" | "donut" | "pie" | "graph";
 
 interface TableColumn {
   key: string;
@@ -36,29 +39,34 @@ interface TableData {
   totalRows: number;
 }
 
+const NAV_BUTTON_CLASS = "rounded-full border-border shadow-sm size-10";
+
 export function PreviewDialog({
   open,
   onOpenChange,
   reportKey,
   reportLabel,
-  isItemModeReport,
   from,
   to,
   accountId,
+  format,
+  onExported,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   reportKey: string;
   reportLabel: string;
-  isItemModeReport: boolean;
   from: string;
   to: string;
   accountId?: string;
+  format: ExportFormat;
+  onExported?: (exportRow: unknown) => void;
 }) {
   const [loading, setLoading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [preview, setPreview] = useState<ChartPreview | null>(null);
   const [tableData, setTableData] = useState<TableData | null>(null);
-  const [chartType, setChartType] = useState<ChartType>(isItemModeReport ? "graph" : "bar");
+  const [chartType, setChartType] = useState<ChartType>("table");
   const [index, setIndex] = useState(0);
 
   // Fetches whenever the dialog transitions to open — driven off the `open`
@@ -95,7 +103,7 @@ export function PreviewDialog({
         setTableData(
           previewData.report ? { ...previewData.report, totalRows: previewData.totalRows } : null
         );
-        setChartType(isItemModeReport ? "graph" : "bar");
+        setChartType("table");
         setIndex(0);
       })
       .finally(() => {
@@ -104,25 +112,79 @@ export function PreviewDialog({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, reportKey, from, to, accountId]);
 
   const options: { value: ChartType; label: string }[] = [
+    { value: "table", label: "Table" },
     { value: "bar", label: "Bar" },
     { value: "donut", label: "Donut" },
     { value: "pie", label: "Pie" },
     ...(preview?.mode === "items" ? [{ value: "graph" as const, label: "Graph" }] : []),
-    { value: "table", label: "Table" },
   ];
 
   const item = preview?.mode === "items" ? preview.items[index] : null;
   const account = preview?.mode === "breakdowns" ? preview.accounts[index] : null;
 
-  // A fixed width regardless of chart mode/table toggle — switching between
-  // them used to resize the dialog (narrow <-> wide), which felt jarring.
+  function toRegion(mode: "bar" | "donut" | "pie", categories: ChartCategory[]): ChartRegion {
+    if (mode === "bar") return { type: "bar", categories };
+    return { type: "pie", categories, donut: mode === "donut" };
+  }
+
+  function chartCells(): { label: string; region: ChartRegion }[] {
+    if (!preview || chartType === "table") return [];
+    if (preview.mode === "aggregate") {
+      return [{ label: preview.title, region: toRegion(chartType as "bar" | "donut" | "pie", preview.categories) }];
+    }
+    if (preview.mode === "items" && item) {
+      if (chartType === "graph") {
+        return [{ label: item.name, region: { type: "line", series: item.series, seriesKeys: item.seriesKeys } }];
+      }
+      return [{ label: item.name, region: toRegion(chartType as "bar" | "donut" | "pie", item.breakdown) }];
+    }
+    if (preview.mode === "breakdowns" && account) {
+      return account.groups.map((g) => ({
+        label: g.label,
+        region: toRegion(chartType as "bar" | "donut" | "pie", g.categories),
+      }));
+    }
+    return [];
+  }
+
+  async function handleDownload() {
+    if (chartType === "table") {
+      if (!tableData) return;
+      setDownloading(true);
+      try {
+        const res = await fetch("/api/reports/export", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reportKey, format, from, to, accountId }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          toast.error(data.error ?? "Export failed");
+          return;
+        }
+        toast.success(`${reportLabel} exported (${data.export.row_count} rows)`);
+        onExported?.(data.export);
+        if (data.url) window.open(data.url, "_blank");
+      } finally {
+        setDownloading(false);
+      }
+      return;
+    }
+
+    const cells = chartCells();
+    if (cells.length === 0) return;
+    const subtitle = item?.name ?? account?.name;
+    const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    const filename = `${slug(reportKey)}${subtitle ? `-${slug(subtitle)}` : ""}.png`;
+    downloadChartsAsPng(filename, subtitle ? `${reportLabel} — ${subtitle}` : reportLabel, cells);
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl min-w-0">
+      <DialogContent className="sm:max-w-3xl min-w-0" closeButtonClassName={NAV_BUTTON_CLASS}>
         <DialogHeader>
           <DialogTitle>Preview — {reportLabel}</DialogTitle>
         </DialogHeader>
@@ -173,7 +235,7 @@ export function PreviewDialog({
                 </TableBody>
               </Table>
             </div>
-            <ChartTypeToggle options={options} value={chartType} onChange={setChartType} />
+            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} />
           </div>
         )}
 
@@ -182,7 +244,7 @@ export function PreviewDialog({
             {chartType === "bar" && <CategoryBars categories={preview.categories} />}
             {chartType === "donut" && <CategoryPie categories={preview.categories} donut />}
             {chartType === "pie" && <CategoryPie categories={preview.categories} donut={false} />}
-            <ChartTypeToggle options={options} value={chartType} onChange={setChartType} />
+            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} />
           </div>
         )}
 
@@ -190,8 +252,9 @@ export function PreviewDialog({
           <div className="space-y-5">
             <div className="flex items-center justify-between">
               <Button
-                variant="ghost"
+                variant="outline"
                 size="icon"
+                className={NAV_BUTTON_CLASS}
                 disabled={index === 0}
                 onClick={() => setIndex((i) => Math.max(0, i - 1))}
               >
@@ -205,8 +268,9 @@ export function PreviewDialog({
                 </p>
               </div>
               <Button
-                variant="ghost"
+                variant="outline"
                 size="icon"
+                className={NAV_BUTTON_CLASS}
                 disabled={index === preview.items.length - 1}
                 onClick={() => setIndex((i) => Math.min(preview.items.length - 1, i + 1))}
               >
@@ -230,7 +294,7 @@ export function PreviewDialog({
             {chartType === "pie" && <CategoryPie categories={item.breakdown} donut={false} />}
             {chartType === "graph" && <TrendGraph series={item.series} seriesKeys={item.seriesKeys} />}
 
-            <ChartTypeToggle options={options} value={chartType} onChange={setChartType} />
+            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} />
           </div>
         )}
 
@@ -244,8 +308,9 @@ export function PreviewDialog({
           <div className="space-y-5">
             <div className="flex items-center justify-between">
               <Button
-                variant="ghost"
+                variant="outline"
                 size="icon"
+                className={NAV_BUTTON_CLASS}
                 disabled={index === 0}
                 onClick={() => setIndex((i) => Math.max(0, i - 1))}
               >
@@ -258,8 +323,9 @@ export function PreviewDialog({
                 </p>
               </div>
               <Button
-                variant="ghost"
+                variant="outline"
                 size="icon"
+                className={NAV_BUTTON_CLASS}
                 disabled={index === preview.accounts.length - 1}
                 onClick={() => setIndex((i) => Math.min(preview.accounts.length - 1, i + 1))}
               >
@@ -277,7 +343,7 @@ export function PreviewDialog({
                 </div>
               ))}
             </div>
-            <ChartTypeToggle options={options} value={chartType} onChange={setChartType} />
+            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} />
           </div>
         )}
 
@@ -290,6 +356,30 @@ export function PreviewDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ToolbarRow({
+  options,
+  value,
+  onChange,
+  onDownload,
+  downloading,
+}: {
+  options: { value: ChartType; label: string }[];
+  value: ChartType;
+  onChange: (v: ChartType) => void;
+  onDownload: () => void;
+  downloading: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 flex-wrap">
+      <ChartTypeToggle options={options} value={value} onChange={onChange} />
+      <Button variant="outline" size="sm" onClick={onDownload} disabled={downloading}>
+        {downloading ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}
+        {value === "table" ? "Download report" : "Download chart"}
+      </Button>
+    </div>
   );
 }
 

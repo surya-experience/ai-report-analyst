@@ -27,9 +27,6 @@ interface AccountOption {
   organization_name: string;
 }
 
-// Kept in sync with ITEM_MODE_REPORT_KEYS in lib/reports/chart-preview.ts —
-// that module is server-only, so this client component can't import it.
-const ITEM_MODE_REPORT_KEYS = new Set(["campaign_delivery", "campaign_statistics", "profile_statistics"]);
 const ACCOUNT_FILTER_REPORT_KEYS = new Set(["account_statistics"]);
 
 interface ExportRow {
@@ -168,10 +165,11 @@ export function ReportBuilder({
           onOpenChange={setPreviewOpen}
           reportKey={reportKey}
           reportLabel={selected?.label ?? ""}
-          isItemModeReport={ITEM_MODE_REPORT_KEYS.has(reportKey)}
           from={range.from}
           to={range.to}
           accountId={effectiveAccountId}
+          format={format as "xlsx" | "csv"}
+          onExported={(row) => setExports((prev) => [row as ExportRow, ...prev])}
         />
 
         <ReportAnalyst
