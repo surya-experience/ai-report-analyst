@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -73,6 +74,11 @@ export function PreviewDialog({
   const [tableData, setTableData] = useState<TableData | null>(null);
   const [chartType, setChartType] = useState<ChartType>("table");
   const [index, setIndex] = useState(0);
+  // SRS Overview ("agents" mode) only: which metric the Bar view compares
+  // across agents, and which agent (or "all", for the Top 5% split) the
+  // Donut/Pie view is scoped to.
+  const [agentMetric, setAgentMetric] = useState("search_rank_score");
+  const [agentFocus, setAgentFocus] = useState("all");
 
   // Fetches whenever the dialog transitions to open — driven off the `open`
   // prop itself (not the Dialog's onOpenChange callback) since this dialog
@@ -110,6 +116,8 @@ export function PreviewDialog({
         );
         setChartType("table");
         setIndex(0);
+        setAgentMetric("search_rank_score");
+        setAgentFocus("all");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -144,6 +152,9 @@ export function PreviewDialog({
       if (chartType === "graph") {
         return [{ label: item.name, region: { type: "line", series: item.series, seriesKeys: item.seriesKeys } }];
       }
+      if (item.groups && item.groups.length > 0) {
+        return item.groups.map((g) => ({ label: `${item.name} — ${g.label}`, region: toRegion(chartType as "bar" | "donut" | "pie", g.categories) }));
+      }
       return [{ label: item.name, region: toRegion(chartType as "bar" | "donut" | "pie", item.breakdown) }];
     }
     if (preview.mode === "breakdowns" && account) {
@@ -151,6 +162,21 @@ export function PreviewDialog({
         label: g.label,
         region: toRegion(chartType as "bar" | "donut" | "pie", g.categories),
       }));
+    }
+    if (preview.mode === "agents") {
+      if (chartType === "bar") {
+        const metricLabel = preview.metrics.find((m) => m.key === agentMetric)?.label ?? agentMetric;
+        return [
+          {
+            label: `${metricLabel} — all agents`,
+            region: { type: "bar", categories: preview.agents.map((a) => ({ label: a.name, value: a.metrics[agentMetric] ?? 0 })) },
+          },
+        ];
+      }
+      const focusedAgent = agentFocus !== "all" ? preview.agents.find((a) => a.id === agentFocus) : null;
+      const categories = focusedAgent ? focusedAgent.breakdown : preview.top5;
+      const label = focusedAgent ? `${focusedAgent.name} — Search Rank Score breakdown` : "Top 5% split — all agents";
+      return [{ label, region: toRegion(chartType as "donut" | "pie", categories) }];
     }
     return [];
   }
@@ -307,9 +333,25 @@ export function PreviewDialog({
               ))}
             </div>
 
-            {chartType === "bar" && <CategoryBars categories={item.breakdown} />}
-            {chartType === "donut" && <CategoryPie categories={item.breakdown} donut />}
-            {chartType === "pie" && <CategoryPie categories={item.breakdown} donut={false} />}
+            {chartType !== "graph" && item.groups && item.groups.length > 0 && (
+              <div className="grid sm:grid-cols-2 gap-5 max-h-[45vh] overflow-y-auto pr-1">
+                {item.groups.map((g) => (
+                  <div key={g.label} className="rounded-lg border p-3">
+                    <p className="text-xs font-semibold mb-2">{g.label}</p>
+                    {chartType === "bar" && <CategoryBars categories={g.categories} />}
+                    {chartType === "donut" && <CategoryPie categories={g.categories} donut />}
+                    {chartType === "pie" && <CategoryPie categories={g.categories} donut={false} />}
+                  </div>
+                ))}
+              </div>
+            )}
+            {chartType !== "graph" && !item.groups && (
+              <>
+                {chartType === "bar" && <CategoryBars categories={item.breakdown} />}
+                {chartType === "donut" && <CategoryPie categories={item.breakdown} donut />}
+                {chartType === "pie" && <CategoryPie categories={item.breakdown} donut={false} />}
+              </>
+            )}
             {chartType === "graph" && <TrendGraph series={item.series} seriesKeys={item.seriesKeys} />}
 
             <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} />
@@ -367,6 +409,64 @@ export function PreviewDialog({
 
         {!loading && chartType !== "table" && preview?.mode === "breakdowns" && preview.accounts.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-10">No accounts to show yet.</p>
+        )}
+
+        {!loading && chartType !== "table" && preview?.mode === "agents" && preview.agents.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-10">No agents ranked yet.</p>
+        )}
+
+        {!loading && chartType === "bar" && preview?.mode === "agents" && preview.agents.length > 0 && (
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-1.5">Metric</p>
+              <Select value={agentMetric} onValueChange={setAgentMetric}>
+                <SelectTrigger className="w-full sm:w-72">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {preview.metrics.map((m) => (
+                    <SelectItem key={m.key} value={m.key}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="max-h-[45vh] overflow-y-auto pr-1">
+              <CategoryBars categories={preview.agents.map((a) => ({ label: a.name, value: a.metrics[agentMetric] ?? 0 }))} />
+            </div>
+            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} />
+          </div>
+        )}
+
+        {!loading && (chartType === "donut" || chartType === "pie") && preview?.mode === "agents" && preview.agents.length > 0 && (
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-1.5">Agent</p>
+              <Select value={agentFocus} onValueChange={setAgentFocus}>
+                <SelectTrigger className="w-full sm:w-72">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All agents — Top 5% split</SelectItem>
+                  {preview.agents.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name} — Search Rank Score breakdown
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {agentFocus === "all" ? (
+              <CategoryPie categories={preview.top5} donut={chartType === "donut"} />
+            ) : (
+              <CategoryPie
+                categories={preview.agents.find((a) => a.id === agentFocus)?.breakdown ?? []}
+                donut={chartType === "donut"}
+              />
+            )}
+            <ToolbarRow options={options} value={chartType} onChange={setChartType} onDownload={handleDownload} downloading={downloading} />
+          </div>
         )}
 
         <DialogFooter>

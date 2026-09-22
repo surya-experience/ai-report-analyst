@@ -161,9 +161,16 @@ const campaignDeliveryStatus: ReportDefinition = {
       return {
         campaign: campaign?.name ?? "—",
         segment: campaign?.segment ?? "—",
+        tier: s.tier_label ?? "—",
+        agent: s.agent_name ?? "—",
         recipient: profile?.name ?? "—",
         email: profile?.email ?? "—",
+        survey_source: s.survey_source ?? "—",
+        anonymous_survey: s.anonymous_survey ? "Yes" : "No",
         status: s.status,
+        user_status: s.user_status,
+        email_reminders_sent: s.email_reminders_sent,
+        sms_sent: s.sms_sent,
         sent_at: fmt(s.sent_at),
       };
     });
@@ -171,9 +178,16 @@ const campaignDeliveryStatus: ReportDefinition = {
       columns: [
         { key: "campaign", label: "Campaign" },
         { key: "segment", label: "Segment" },
+        { key: "tier", label: "Tier" },
+        { key: "agent", label: "Agent" },
         { key: "recipient", label: "Recipient" },
         { key: "email", label: "Email" },
+        { key: "survey_source", label: "Survey Source" },
+        { key: "anonymous_survey", label: "Anonymous Survey" },
         { key: "status", label: "Status" },
+        { key: "user_status", label: "User Status" },
+        { key: "email_reminders_sent", label: "Number of Email Reminders Sent" },
+        { key: "sms_sent", label: "Number of SMS Sent" },
         { key: "sent_at", label: "Sent" },
       ],
       rows,
@@ -274,41 +288,70 @@ const surveyResults: ReportDefinition = {
   },
 };
 
+// SRS = Search Rank Score. One row per agent, using each agent's LATEST
+// profile_daily_stats snapshot at or before `range.to` — a leaderboard
+// snapshot, not a trend (see knowledge.ts). Matches the real report's
+// column set exactly, minus city/state/zip (this app's `profiles` table
+// stores one combined "City, ST" location string, not separate fields).
 const srsOverview: ReportDefinition = {
   key: "srs_overview",
   label: "SRS Overview Report",
-  description: "Survey Results Summary — response counts and average rating per survey.",
+  description: "Search Rank Score leaderboard — one row per agent, with its category breakdown and Top 5% flag.",
   async fetch(supabase, range) {
-    const { data: surveys } = await supabase.from("surveys").select("*");
-    const { data: responses } = await supabase
-      .from("survey_responses")
-      .select("survey_id, rating, created_at")
-      .gte("created_at", range.from)
-      .lte("created_at", endOfDay(range.to));
+    const { data } = await supabase
+      .from("profile_daily_stats")
+      .select("*, profiles(name, location)")
+      .lte("stat_date", range.to)
+      .order("stat_date", { ascending: false })
+      .limit(5000);
 
-    const rows = (surveys ?? []).map((s) => {
-      const forSurvey = (responses ?? []).filter((r) => r.survey_id === s.id);
-      const avg = forSurvey.length
-        ? (forSurvey.reduce((sum, r) => sum + r.rating, 0) / forSurvey.length).toFixed(2)
-        : "—";
-      return {
-        survey: s.name,
-        responses: forSurvey.length,
-        avg_rating: avg,
-        five_star: forSurvey.filter((r) => r.rating === 5).length,
-        one_star: forSurvey.filter((r) => r.rating === 1).length,
-      };
-    });
+    const latestByProfile = new Map<string, NonNullable<typeof data>[number]>();
+    for (const r of data ?? []) {
+      if (!latestByProfile.has(r.profile_id)) latestByProfile.set(r.profile_id, r);
+    }
+
+    const rows = [...latestByProfile.values()]
+      .map((r) => {
+        const profile = r.profiles as unknown as { name: string; location: string } | null;
+        const [city, state] = (profile?.location ?? "").split(",").map((s) => s.trim());
+        const searchRankScore =
+          r.profile_completion_points + r.review_reply_points + r.connections_points + r.listings_points + r.web_analytics_points;
+        return {
+          agent: profile?.name ?? "—",
+          city: city || "—",
+          state: state || "—",
+          location_based_rank: r.location_rank ?? "",
+          total_visited_count: r.profile_views,
+          search_rank_score: searchRankScore,
+          reviews_replies_score: r.review_reply_points,
+          profile_completion_score: r.profile_completion_points,
+          social_connections_score: r.connections_points,
+          web_analytics_score: r.web_analytics_points,
+          listings_score: r.listings_points,
+          total_experience_score: r.total_experience_score ?? 0,
+          top_5_percent: r.top_5_percent ? "Yes" : "No",
+        };
+      })
+      .sort((a, b) => b.search_rank_score - a.search_rank_score);
+
     return {
       columns: [
-        { key: "survey", label: "Survey" },
-        { key: "responses", label: "Responses" },
-        { key: "avg_rating", label: "Avg rating" },
-        { key: "five_star", label: "5-star" },
-        { key: "one_star", label: "1-star" },
+        { key: "agent", label: "User Name" },
+        { key: "city", label: "City" },
+        { key: "state", label: "State" },
+        { key: "location_based_rank", label: "Location based Rank" },
+        { key: "total_visited_count", label: "Total Visited Count" },
+        { key: "search_rank_score", label: "Search Rank Score" },
+        { key: "reviews_replies_score", label: "Reviews Replies Score" },
+        { key: "profile_completion_score", label: "Profile Completion Score" },
+        { key: "social_connections_score", label: "Social Connections Score" },
+        { key: "web_analytics_score", label: "Web Analytics Score" },
+        { key: "listings_score", label: "Listings Score" },
+        { key: "total_experience_score", label: "Total Experience Score" },
+        { key: "top_5_percent", label: "Top 5%" },
       ],
       rows,
-      summaryLabel: `SRS Overview · ${range.from} to ${range.to} · ${rows.length} surveys included.`,
+      summaryLabel: `SRS Overview · as of ${range.to} · ${rows.length} agents ranked.`,
     };
   },
 };

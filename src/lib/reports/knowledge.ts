@@ -31,7 +31,7 @@ Why a row might be missing: its status isn't one of the tracked delivery/complet
 
 Known quirk: "Survey status" only tracks sent/reminder-stage/completed — bounced or opted-out sends are simply excluded, not shown with their own status label.
 
-**This app's version**: one row per email send in \`campaign_sends\`, with a simpler status set (queued/sent/opened/clicked/bounced/failed) and no reminder-cadence, SMS, or agent-role scoping — those columns don't exist in this deployment.
+**This app's version**: one row per email send in \`campaign_sends\`, with a simpler status set (queued/sent/opened/clicked/bounced/failed) rather than the documented sent/reminder-stage/completed states. It now also carries Tier, Agent, Survey Source, Anonymous Survey, User Status, and Email/SMS reminder counts (added to match the real report's transaction-level columns), though reminder counts here are illustrative — there's no real reminder-cadence automation or agent-role scoping in this deployment. The preview's chart view breaks each campaign down by delivery status, survey source, tier, user status, and anonymity — one chart per dimension, since a transaction-level report like this naturally slices several ways rather than having one canonical breakdown.
 `.trim(),
 
   campaign_statistics: `
@@ -63,7 +63,7 @@ Full production version: one row per completed survey response — reviewer/agen
 
 Only active/onboarding agents by default (or only deactivated, if selected) with recorded ranking data appear. Location-based Rank and Top 5% are blank for deactivated agents.
 
-**This app's version**: adapted to survey ratings instead of a real search-ranking system — it shows response count and average star rating per survey, with 5-star and 1-star counts as a simple distribution. There's no location-based ranking, category-score breakdown, or Top 5% flag in this deployment.
+**This app's version**: matches the documented column set — one row per profile ("agent"), using each profile's LATEST \`profile_daily_stats\` snapshot (the same table Profile Statistics trends over time), with Location-based Rank, Total Visited Count, Search Rank Score and its 5 category components, Total Experience Score, and a Top 5% flag. City/State come from splitting this app's single \`profiles.location\` field ("City, ST") — there's no separate Zipcode column in this deployment. It's seeded sample data (\`supabase/seed_profile_stats.sql\`) rather than a live ranking pipeline, so treat it as illustrative. The preview's chart view lets you compare any one metric across all agents as a Bar chart, see the Top 5% split as a Donut/Pie, or pick a single agent to see their Search Rank Score's 5-category breakdown as a Donut/Pie (that breakdown only makes sense for one agent at a time, since Search Rank Score is a per-agent sum).
 `.trim(),
 
   profile_statistics: `

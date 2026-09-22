@@ -24,6 +24,12 @@ export interface PreviewItem {
   subtitle: string;
   stats: { label: string; value: string }[];
   breakdown: ChartCategory[];
+  // Campaign items only: additional part-to-whole breakdowns beyond the
+  // primary Sent/Opened/Clicked one (survey source, tier, user status,
+  // anonymity) — rendered as a grid, same pattern as AccountBreakdown's
+  // `groups`. Optional so profile_statistics items (a single breakdown,
+  // no extra dimensions) are unaffected.
+  groups?: ChartBreakdownGroup[];
   series: Record<string, number | string>[];
   seriesKeys: SeriesLineDef[];
 }
@@ -40,6 +46,21 @@ export interface AccountBreakdown {
   groups: ChartBreakdownGroup[];
 }
 
+export interface AgentMetricDef {
+  key: string;
+  label: string;
+}
+
+export interface AgentSummary {
+  id: string;
+  name: string;
+  metrics: Record<string, number>;
+  // Search Rank Score's 5 category components for this one agent — only
+  // meaningful scoped to a single agent (they sum to that agent's Search
+  // Rank Score), not aggregated across agents.
+  breakdown: ChartCategory[];
+}
+
 export type ChartPreview =
   | { mode: "aggregate"; title: string; categories: ChartCategory[] }
   | { mode: "items"; title: string; items: PreviewItem[] }
@@ -47,7 +68,11 @@ export type ChartPreview =
   // selected one, or all of them when the filter is "All accounts") —
   // pageable with the same prev/next pattern as `items`, so "all accounts"
   // is browsable instead of silently picking one.
-  | { mode: "breakdowns"; title: string; accounts: AccountBreakdown[] };
+  | { mode: "breakdowns"; title: string; accounts: AccountBreakdown[] }
+  // SRS Overview only: one row per agent, so — unlike `items` — every
+  // agent is visible at once for cross-agent bar comparisons, plus a
+  // Top 5% split and each agent's own score breakdown for donut/pie.
+  | { mode: "agents"; title: string; metrics: AgentMetricDef[]; agents: AgentSummary[]; top5: ChartCategory[] };
 
 const ITEM_MODE_REPORT_KEYS = new Set(["campaign_delivery", "campaign_statistics", "profile_statistics"]);
 
@@ -78,7 +103,7 @@ async function buildCampaignItems(
   for (const c of campaigns ?? []) {
     const { data: sends } = await supabase
       .from("campaign_sends")
-      .select("status, sent_at, opened_at")
+      .select("status, sent_at, opened_at, tier_label, survey_source, anonymous_survey, user_status")
       .eq("campaign_id", c.id);
 
     const rows = sends ?? [];
@@ -86,6 +111,32 @@ async function buildCampaignItems(
     const opened = rows.filter((s) => ["opened", "clicked"].includes(s.status)).length;
     const clicked = rows.filter((s) => s.status === "clicked").length;
     const pct = (n: number, total: number) => (total ? `${Math.round((n / total) * 100)}%` : "—");
+
+    // Extra breakdown groups from the real Campaign Delivery Status
+    // Report's transaction-level columns (see knowledge.ts) — counted the
+    // same way accountBreakdownGroups() counts a documented pair of
+    // columns, just grouped by distinct value here since these are
+    // free-form/categorical rather than fixed pairs.
+    const countBy = (values: (string | null)[]) => {
+      const counts = new Map<string, number>();
+      for (const v of values) {
+        const label = v ?? "—";
+        counts.set(label, (counts.get(label) ?? 0) + 1);
+      }
+      return [...counts.entries()].map(([label, value]) => ({ label, value }));
+    };
+    const extraGroups: ChartBreakdownGroup[] =
+      rows.length === 0
+        ? []
+        : [
+            { label: "Survey source", categories: countBy(rows.map((s) => s.survey_source)) },
+            { label: "Tier", categories: countBy(rows.map((s) => s.tier_label)) },
+            { label: "User status", categories: countBy(rows.map((s) => s.user_status)) },
+            {
+              label: "Anonymous survey",
+              categories: countBy(rows.map((s) => (s.anonymous_survey ? "Yes" : "No"))),
+            },
+          ];
 
     // Real cumulative counts by day from actual sent_at/opened_at
     // timestamps — no synthetic distribution.
@@ -124,6 +175,11 @@ async function buildCampaignItems(
         { label: "Opened", value: opened },
         { label: "Clicked", value: clicked },
       ],
+      groups: [{ label: "Delivery status", categories: [
+        { label: "Sent", value: sent },
+        { label: "Opened", value: opened },
+        { label: "Clicked", value: clicked },
+      ] }, ...extraGroups],
       series,
       seriesKeys: [
         { key: "sent", label: "Sent (cumulative)", color: "#4C5FDB" },
@@ -192,6 +248,71 @@ async function buildProfileStatItems(supabase: SupabaseClient<Database>, range: 
     });
   }
   return items;
+}
+
+const AGENT_METRICS: AgentMetricDef[] = [
+  { key: "location_rank", label: "Location based Rank" },
+  { key: "profile_views", label: "Total Visited Count" },
+  { key: "search_rank_score", label: "Search Rank Score" },
+  { key: "review_reply_points", label: "Reviews Replies Score" },
+  { key: "profile_completion_points", label: "Profile Completion Score" },
+  { key: "connections_points", label: "Social Connections Score" },
+  { key: "web_analytics_points", label: "Web Analytics Score" },
+  { key: "listings_points", label: "Listings Score" },
+  { key: "total_experience_score", label: "Total Experience Score" },
+];
+
+// SRS = Search Rank Score. One row per agent, using each agent's LATEST
+// snapshot at or before `range.to` — the real report is a point-in-time
+// leaderboard, not a trend (that's what Profile Statistics is for, over
+// the same underlying profile_daily_stats table).
+async function buildAgentOverview(supabase: SupabaseClient<Database>, range: DateRange) {
+  const { data } = await supabase
+    .from("profile_daily_stats")
+    .select("*, profiles(name)")
+    .lte("stat_date", range.to)
+    .order("stat_date", { ascending: false })
+    .limit(5000);
+
+  const latestByProfile = new Map<string, NonNullable<typeof data>[number]>();
+  for (const r of data ?? []) {
+    if (!latestByProfile.has(r.profile_id)) latestByProfile.set(r.profile_id, r);
+  }
+
+  const agents: AgentSummary[] = [...latestByProfile.values()].map((r) => {
+    const profile = r.profiles as unknown as { name: string } | null;
+    const searchRankScore =
+      r.profile_completion_points + r.review_reply_points + r.connections_points + r.listings_points + r.web_analytics_points;
+    return {
+      id: r.profile_id,
+      name: profile?.name ?? "—",
+      metrics: {
+        location_rank: r.location_rank ?? 0,
+        profile_views: r.profile_views,
+        search_rank_score: searchRankScore,
+        review_reply_points: r.review_reply_points,
+        profile_completion_points: r.profile_completion_points,
+        connections_points: r.connections_points,
+        web_analytics_points: r.web_analytics_points,
+        listings_points: r.listings_points,
+        total_experience_score: r.total_experience_score ?? 0,
+      },
+      breakdown: [
+        { label: "Reviews Replies", value: r.review_reply_points },
+        { label: "Profile Completion", value: r.profile_completion_points },
+        { label: "Social Connections", value: r.connections_points },
+        { label: "Web Analytics", value: r.web_analytics_points },
+        { label: "Listings", value: r.listings_points },
+      ],
+    };
+  });
+
+  const top5 = [
+    { label: "Top 5%", value: [...latestByProfile.values()].filter((r) => r.top_5_percent).length },
+    { label: "Not top 5%", value: [...latestByProfile.values()].filter((r) => !r.top_5_percent).length },
+  ];
+
+  return { agents, top5 };
 }
 
 // Every pair here is a real part-to-whole breakdown of two-or-more columns
@@ -299,7 +420,7 @@ export async function buildChartPreview(
     return { mode: "items", title: "Profile Statistics Report", items: await buildProfileStatItems(supabase, range) };
   }
 
-  if (reportKey === "survey_results" || reportKey === "srs_overview") {
+  if (reportKey === "survey_results") {
     let responseQuery = supabase
       .from("survey_responses")
       .select("rating, surveys!inner(campaign_id)")
@@ -313,6 +434,11 @@ export async function buildChartPreview(
       value: rows.filter((r) => r.rating === star).length,
     }));
     return { mode: "aggregate", title: "Rating distribution", categories };
+  }
+
+  if (reportKey === "srs_overview") {
+    const { agents, top5 } = await buildAgentOverview(supabase, range);
+    return { mode: "agents", title: "SRS Overview Report", metrics: AGENT_METRICS, agents, top5 };
   }
 
   // account_statistics (default): part-to-whole breakdowns, one entry per

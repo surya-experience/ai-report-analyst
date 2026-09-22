@@ -121,6 +121,15 @@ export interface CampaignSend {
   sent_at: string | null;
   opened_at: string | null;
   clicked_at: string | null;
+  // Chart-worthy fields matching the real Campaign Delivery Status
+  // Report's transaction-level columns (see lib/reports/knowledge.ts).
+  tier_label: string | null;
+  agent_name: string | null;
+  survey_source: string | null;
+  anonymous_survey: boolean;
+  user_status: string;
+  email_reminders_sent: number;
+  sms_sent: number;
   created_at: string;
 }
 
