@@ -53,7 +53,7 @@ const SUGGESTIONS_BY_REPORT: Record<string, string[]> = {
 };
 
 function openingMessage(reportLabel: string) {
-  return `Hi, I'm your report analyst. Ask me anything about ${reportLabel || "this report"}'s data — totals, comparisons, trends, or click a chart and ask me to analyze it.`;
+  return `Ask me about ${reportLabel || "this report"}'s totals, comparisons, or trends — or click a chart to analyze it.`;
 }
 
 // A fenced ```chart block (the model's convention for "return structured
@@ -171,15 +171,20 @@ export function ReportAnalyst({
         <div className="space-y-3 max-h-80 overflow-y-auto pr-1 lg:max-h-none lg:flex-1 lg:min-h-0">
           {turns.map((t, i) => {
             const { prose, chart } = t.role === "assistant" ? parseChartReply(t.text) : { prose: t.text, chart: null };
+            // The user's own question is a compact, right-aligned bubble
+            // (like a normal chat UI) instead of a full-width block, so it
+            // doesn't eat width the assistant's actual answer content needs.
+            if (t.role === "user") {
+              return (
+                <div key={i} className="flex justify-end">
+                  <div className="bg-indigo-600 text-white rounded-xl px-3.5 py-2 text-sm leading-relaxed max-w-[80%]">
+                    {prose}
+                  </div>
+                </div>
+              );
+            }
             return (
-              <div
-                key={i}
-                className={
-                  t.role === "assistant"
-                    ? "bg-amber-50 text-amber-950 rounded-xl px-4 py-3 text-sm leading-relaxed space-y-3"
-                    : "bg-indigo-600 text-white rounded-xl px-4 py-3 text-sm leading-relaxed ml-8"
-                }
-              >
+              <div key={i} className="bg-amber-50 text-amber-950 rounded-xl px-4 py-3 text-sm leading-relaxed space-y-3">
                 {prose && <p className="whitespace-pre-wrap">{prose}</p>}
                 {chart &&
                   (chart.type === "bar" ? (
