@@ -45,7 +45,7 @@ export default async function DashboardPage() {
                 Search the directory to find and claim your professional profile.
               </p>
               <Button asChild>
-                <Link href="/">Search the directory</Link>
+                <Link href="/directory">Search the directory</Link>
               </Button>
             </CardContent>
           </Card>

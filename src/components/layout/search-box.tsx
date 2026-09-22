@@ -13,7 +13,7 @@ export function SearchBox({ placeholder }: { placeholder?: string }) {
   function submit(e: React.FormEvent) {
     e.preventDefault();
     const q = value.trim();
-    router.push(q ? `/?q=${encodeURIComponent(q)}` : "/");
+    router.push(q ? `/directory?q=${encodeURIComponent(q)}` : "/directory");
   }
 
   return (

@@ -124,7 +124,7 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <main className="flex-1 flex flex-col items-center justify-center px-6 py-16">
-      <Link href="/" className="text-xl font-extrabold tracking-tight mb-8">
+      <Link href="/directory" className="text-xl font-extrabold tracking-tight mb-8">
         experience<span className="text-indigo-600">.com</span>
       </Link>
       <div className="w-full max-w-sm">

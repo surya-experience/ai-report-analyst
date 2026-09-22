@@ -11,7 +11,7 @@ export function ViewAsTopbar({ profileName }: { profileName: string }) {
 
   return (
     <header className="sticky top-0 z-40 flex items-center gap-5 border-b bg-background px-6 py-3">
-      <Link href="/" className="text-xl font-extrabold tracking-tight shrink-0">
+      <Link href="/admin" className="text-xl font-extrabold tracking-tight shrink-0">
         experience<span className="text-indigo-600">.com</span>
       </Link>
 

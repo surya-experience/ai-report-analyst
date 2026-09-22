@@ -10,7 +10,7 @@ import { AdminSidebar } from "@/components/admin/sidebar";
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-dvh flex flex-col overflow-hidden">
-      <Topbar />
+      <Topbar homeHref="/admin" />
       <div className="flex flex-1 min-h-0">
         <AdminSidebar role="admin" />
         <main className="flex-1 min-w-0 px-8 py-7 overflow-y-auto">{children}</main>
