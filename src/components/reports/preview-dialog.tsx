@@ -92,15 +92,13 @@ export function PreviewDialog({
         ];
 
   const item = preview?.mode === "items" ? preview.items[index] : null;
+  const account = preview?.mode === "breakdowns" ? preview.accounts[index] : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={preview?.mode === "breakdowns" ? "sm:max-w-3xl" : "sm:max-w-xl"}>
         <DialogHeader>
           <DialogTitle>Preview — {reportLabel}</DialogTitle>
-          {preview?.mode === "breakdowns" && preview.subtitle && (
-            <p className="text-xs text-muted-foreground">{preview.subtitle}</p>
-          )}
         </DialogHeader>
 
         {loading && (
@@ -172,10 +170,35 @@ export function PreviewDialog({
           </p>
         )}
 
-        {!loading && preview?.mode === "breakdowns" && preview.groups.length > 0 && (
+        {!loading && preview?.mode === "breakdowns" && account && (
           <div className="space-y-5">
-            <div className="grid sm:grid-cols-2 gap-5 max-h-[60vh] overflow-y-auto pr-1">
-              {preview.groups.map((g) => (
+            <div className="flex items-center justify-between">
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={index === 0}
+                onClick={() => setIndex((i) => Math.max(0, i - 1))}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="text-center">
+                <p className="font-bold">{account.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  Account {index + 1} of {preview.accounts.length} · {account.subtitle}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={index === preview.accounts.length - 1}
+                onClick={() => setIndex((i) => Math.min(preview.accounts.length - 1, i + 1))}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-5 max-h-[55vh] overflow-y-auto pr-1">
+              {account.groups.map((g) => (
                 <div key={g.label} className="rounded-lg border p-3">
                   <p className="text-xs font-semibold mb-2">{g.label}</p>
                   {chartType === "bar" && <CategoryBars categories={g.categories} />}
@@ -198,7 +221,7 @@ export function PreviewDialog({
           </div>
         )}
 
-        {!loading && preview?.mode === "breakdowns" && preview.groups.length === 0 && (
+        {!loading && preview?.mode === "breakdowns" && preview.accounts.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-10">No accounts to show yet.</p>
         )}
 

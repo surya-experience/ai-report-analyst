@@ -33,12 +33,21 @@ export interface ChartBreakdownGroup {
   categories: ChartCategory[];
 }
 
+export interface AccountBreakdown {
+  id: string;
+  name: string;
+  subtitle: string;
+  groups: ChartBreakdownGroup[];
+}
+
 export type ChartPreview =
   | { mode: "aggregate"; title: string; categories: ChartCategory[] }
   | { mode: "items"; title: string; items: PreviewItem[] }
-  // Multiple named part-to-whole breakdowns for one selected account —
-  // Account Statistics only. Each group renders as its own small chart.
-  | { mode: "breakdowns"; title: string; subtitle: string; groups: ChartBreakdownGroup[] };
+  // Account Statistics only: one entry per account in scope (just the
+  // selected one, or all of them when the filter is "All accounts") —
+  // pageable with the same prev/next pattern as `items`, so "all accounts"
+  // is browsable instead of silently picking one.
+  | { mode: "breakdowns"; title: string; accounts: AccountBreakdown[] };
 
 const ITEM_MODE_REPORT_KEYS = new Set(["campaign_delivery", "campaign_statistics", "profile_statistics"]);
 
@@ -294,21 +303,21 @@ export async function buildChartPreview(
     return { mode: "aggregate", title: "Rating distribution", categories };
   }
 
-  // account_statistics (default): part-to-whole breakdowns for the
-  // selected account (or the first account, if none is selected yet).
-  let accountQuery = supabase.from("accounts").select("*").order("account_name", { ascending: true }).limit(1);
-  if (params?.accountId) accountQuery = supabase.from("accounts").select("*").eq("id", params.accountId);
+  // account_statistics (default): part-to-whole breakdowns, one entry per
+  // account in scope — just the selected one, or every account when the
+  // filter is "All accounts" (pageable, not silently the first one).
+  let accountQuery = supabase.from("accounts").select("*").order("account_name", { ascending: true });
+  if (params?.accountId) accountQuery = accountQuery.eq("id", params.accountId);
   const { data: accountRows } = await accountQuery;
-  const account = accountRows?.[0];
-
-  if (!account) {
-    return { mode: "breakdowns", title: "Account Statistics Report", subtitle: "No accounts found", groups: [] };
-  }
 
   return {
     mode: "breakdowns",
     title: "Account Statistics Report",
-    subtitle: `${account.account_name} · ${account.organization_name}`,
-    groups: accountBreakdownGroups(account),
+    accounts: (accountRows ?? []).map((account) => ({
+      id: account.id,
+      name: account.account_name,
+      subtitle: account.organization_name,
+      groups: accountBreakdownGroups(account),
+    })),
   };
 }
