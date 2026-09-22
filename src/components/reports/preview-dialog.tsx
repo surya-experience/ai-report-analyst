@@ -360,14 +360,14 @@ export function PreviewDialog({
 
         {!loading && chartType !== "table" && preview?.mode === "aggregate" && (
           <div className="space-y-5">
-            <div className={preview.groups && preview.groups.length > 0 ? "max-h-[22vh] overflow-y-auto pr-1" : undefined}>
+            <div>
               <p className="text-xs font-semibold mb-2">{preview.title}</p>
               {chartType === "bar" && <CategoryBars categories={preview.categories} />}
               {chartType === "donut" && <CategoryPie categories={preview.categories} donut />}
               {chartType === "pie" && <CategoryPie categories={preview.categories} donut={false} />}
             </div>
             {preview.groups && preview.groups.length > 0 && (
-              <div className="grid sm:grid-cols-2 gap-5 max-h-[26vh] overflow-y-auto pr-1">
+              <div className="grid sm:grid-cols-2 gap-5">
                 {preview.groups.map((g) => (
                   <div key={g.label} className="rounded-lg border p-3">
                     <p className="text-xs font-semibold mb-2">{g.label}</p>
